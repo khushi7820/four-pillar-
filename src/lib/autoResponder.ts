@@ -271,69 +271,52 @@ export async function generateAutoResponse(
             await updateUserConversationStage(fromNumber, toNumber, newStage, newInfo, firstMessageSent);
         }
 
-        // 12. Send the response via WhatsApp (Balanced splitting: 1-2 bubbles max)
-        // We split only by double newlines to keep points together in 1-2 bubbles
-        const messageChunks = response
-            .split(/\n\n+/)
-            .map(chunk => chunk.trim())
-            .filter(chunk => chunk.length > 0);
-
-        console.log(`Splitting response into ${messageChunks.length} chunks`);
-
+        // 12. Send the entire response in a SINGLE bubble (One message only)
+        console.log(`Sending response as a single bubble to ${fromNumber}`);
+        
         let allSent = true;
         let lastError = "";
 
-        for (let i = 0; i < messageChunks.length; i++) {
-            const chunk = messageChunks[i];
-            
-            // Send to WhatsApp
-            const sendResult = await sendWhatsAppMessage(fromNumber, chunk, auth_token, origin);
-            
-            if (sendResult.success) {
-                // Store each chunk in the database
-                const responseMessageId = `auto_${messageId}_${Date.now()}_${i}`;
-                await supabase
-                    .from("whatsapp_messages")
-                    .insert([
-                        {
-                            message_id: responseMessageId,
-                            channel: "whatsapp",
-                            from_number: toNumber,
-                            to_number: fromNumber,
-                            received_at: new Date().toISOString(),
-                            content_type: "text",
-                            content_text: chunk,
-                            sender_name: "AI Assistant",
-                            event_type: "MtMessage",
-                            is_in_24_window: true,
-                            is_responded: false,
-                            auto_respond_sent: false,
-                            raw_payload: {
-                                messageId: responseMessageId,
-                                isAutoResponse: true,
-                                chunkIndex: i
-                            },
+        // Send to WhatsApp
+        const sendResult = await sendWhatsAppMessage(fromNumber, response, auth_token, origin);
+        
+        if (sendResult.success) {
+            // Store the full response in the database
+            const responseMessageId = `auto_${messageId}_${Date.now()}`;
+            await supabase
+                .from("whatsapp_messages")
+                .insert([
+                    {
+                        message_id: responseMessageId,
+                        channel: "whatsapp",
+                        from_number: toNumber,
+                        to_number: fromNumber,
+                        received_at: new Date().toISOString(),
+                        content_type: "text",
+                        content_text: response,
+                        sender_name: "AI Assistant",
+                        event_type: "MtMessage",
+                        is_in_24_window: true,
+                        is_responded: false,
+                        auto_respond_sent: false,
+                        raw_payload: {
+                            messageId: responseMessageId,
+                            isAutoResponse: true
                         },
-                    ]);
-                
-                // Add a small delay between messages to simulate typing (except for the last message)
-                if (i < messageChunks.length - 1) {
-                    const delay = Math.min(1500, 800 + (chunk.length * 5)); // Dynamic delay based on length
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                }
-            } else {
-                allSent = false;
-                lastError = sendResult.error || "Unknown error";
-                console.error(`Failed to send chunk ${i}:`, lastError);
-            }
+                    },
+                ]);
+        } else {
+            allSent = false;
+            lastError = sendResult.error || "Unknown error";
+            console.error(`Failed to send response:`, lastError);
         }
 
-        if (!allSent && messageChunks.length > 0) {
+        if (!allSent) {
             return {
                 success: false,
                 response,
                 sent: false,
-                error: `Failed to send some/all chunks: ${lastError}`,
+                error: `Failed to send response: ${lastError}`,
             };
         }
 
