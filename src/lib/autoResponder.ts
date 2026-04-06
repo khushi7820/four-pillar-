@@ -148,12 +148,12 @@ export async function generateAutoResponse(
             systemPrompt += `\n\n=== ADDITIONAL CUSTOM GUIDELINES ===\n${customSystemPrompt}\n`;
         }
         
-        // SLEEK ULTRA-CONCISE RULE
-        systemPrompt += `\n\n=== MANDATORY SLEEK FORMATTING ===\n`;
-        systemPrompt += `1. **ONE LINE RULE**: Each bubble/point must NOT exceed 1 line on a mobile screen.\n`;
-        systemPrompt += `2. **BULLET POINTS**: Use • for services (e.g. • THE REACH: Marketing strategy 🚀).\n`;
-        systemPrompt += `3. **NO FLUFF**: Remove all introductory filler phrases ("So you want...").\n`;
-        systemPrompt += `4. **REPLY STYLE**: Just provide the direct answer and move to the next question.\n`;
+        // FINAL SLEEK FORMATTING RULE
+        systemPrompt += `\n\n=== MANDATORY FORMATTING (LINE-BY-LINE) ===\n`;
+        systemPrompt += `1. **ONE LINE RULE**: Maximum 1 sentence per message. **End every sentence/point with a newline (\\n)**.\n`;
+        systemPrompt += `2. **CLEAR PRICING**: Format amounts like: ✨ Amount: ₹XX,XXX 💸 (Use independent lines).\n`;
+        systemPrompt += `3. **NO BLOCKS**: Do not write paragraphs. Just short, attractive lines.\n`;
+        systemPrompt += `4. ALWAYS use emojis to make it look premium and readable.\n`;
 
         // 8. Add document context to system prompt
         if (contextText) {
@@ -271,10 +271,10 @@ export async function generateAutoResponse(
             await updateUserConversationStage(fromNumber, toNumber, newStage, newInfo, firstMessageSent);
         }
 
-        // 12. Send the response via WhatsApp (Splitting into multiple messages if long)
-        // We split by double newlines or single newlines if paragraphs are long
+        // 12. Send the response via WhatsApp (Aggressive splitting for readability)
+        // We split by newlines (single or double) to ensure small bubbles
         const messageChunks = response
-            .split(/\n\n+/)
+            .split(/\n+/)
             .map(chunk => chunk.trim())
             .filter(chunk => chunk.length > 0);
 
