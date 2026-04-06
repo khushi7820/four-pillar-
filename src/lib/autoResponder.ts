@@ -240,26 +240,41 @@ export async function generateAutoResponse(
         // 11. Parse internal reporting tags and update state
         const stageUpdateMatch = response.match(/\[STAGE:\s*(.*?)\]/i);
         const infoMatches = Array.from(response.matchAll(/\[INFO:\s*(.*?)=(.*?)\]/gi));
-        const firstMessageSentMatch = response.match(/\[FIRST_MESSAGE_SENT:\s*true\]/i);
 
         let newStage = stageUpdateMatch ? stageUpdateMatch[1].trim() : undefined;
         let newInfo: Record<string, any> = {};
         for (const match of infoMatches) {
             newInfo[match[1].trim()] = match[2].trim();
         }
-        let firstMessageSent = firstMessageSentMatch ? true : undefined;
 
-        // Clean meta-tags from response
+        // Clean meta-tags from response STERNLY
         response = response
             .replace(/\[STAGE:\s*.*?\]/gi, "")
             .replace(/\[INFO:\s*.*?=.*?\]/gi, "")
-            .replace(/\[FIRST_MESSAGE_SENT:\s*true\]/gi, "")
             .trim();
-
-        // Update database stage/info
-        if (newStage || Object.keys(newInfo).length > 0 || firstMessageSent) {
-            await updateUserConversationStage(fromNumber, toNumber, newStage, newInfo, firstMessageSent);
+        
+        // If we were supposed to be at DISCOVERY but the user replied, we assume success
+        if (userStageData.current_stage === "DISCOVERY" && !newStage) {
+            newStage = "SELL";
         }
+        if (userStageData.current_stage === "SELL" && !newStage) {
+            newStage = "CUSTOMER";
+        }
+        if (userStageData.current_stage === "CUSTOMER" && !newStage) {
+            newStage = "BRANDING";
+        }
+        if (userStageData.current_stage === "BRANDING" && !newStage) {
+            newStage = "MARKETING";
+        }
+        if (userStageData.current_stage === "MARKETING" && !newStage) {
+            newStage = "GOAL";
+        }
+        if (userStageData.current_stage === "GOAL" && !newStage) {
+            newStage = "BUDGET";
+        }
+
+        // Always mark first message as sent after the first interaction
+        await updateUserConversationStage(fromNumber, toNumber, newStage, newInfo, true);
 
         // 12. SMART SPLITTING (Split into 2-3 bubbles if long)
         const messageChunks = response
