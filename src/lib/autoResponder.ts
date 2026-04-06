@@ -119,48 +119,29 @@ export async function generateAutoResponse(
         
         console.log(`Pre-processing took ${Date.now() - startTime}ms`);
 
-        // 7. Build the system prompt using the master persona
+        // 7. Build the system prompt using the master persona ONLY
+        // We IGNORE custom prompts to ensure the script mirror is perfect
         let systemPrompt: string = MASTER_SYSTEM_PROMPT;
 
-        // Add current state
-        systemPrompt += `\n\n=== CURRENT CONVERSATION STATE ===\n`;
-        systemPrompt += `- Current Stage: ${userStageData.current_stage}\n`;
-        systemPrompt += `- Collected Info: ${JSON.stringify(userStageData.collected_info)}\n`;
-        systemPrompt += `- First Message Sent: ${userStageData.first_message_sent}\n`;
+        // Add current state (for AI's internal knowledge ONLY)
+        systemPrompt += `\n\n=== CONTEXT ===\n`;
         systemPrompt += `- Detected Language: ${detectedLanguage}\n`;
 
         if (!userStageData.first_message_sent) {
-            systemPrompt += `\n\n=== FIRST MESSAGE TASK ===\n`;
-            systemPrompt += `This is your first reply ever to this user. You MUST start with the EXACT First Message defined in Section 3, then proceed to address their specific query if any.\n`;
-        }
-
-        // Add internal reporting instructions
-        systemPrompt += `\n\n=== INTERNAL REPORTING (MUST INCLUDE AT THE END OF RESPONSE) ===\n`;
-        systemPrompt += `If you identify new information or need to move to the next stage, append these to your response in square brackets (they will be hidden from the user):\n`;
-        systemPrompt += `- To update stage: [STAGE: NEW_STAGE_NAME]\n`;
-        systemPrompt += `- To save info: [INFO: key=value]\n`;
-        if (!userStageData.first_message_sent) {
-            systemPrompt += `- To mark first message as sent: [FIRST_MESSAGE_SENT: true]\n`;
-        }
-
-        // Add helpful formatting guidelines (if custom prompt exists, append it too)
-        if (customSystemPrompt && customSystemPrompt.trim().length > 0) {
-            systemPrompt += `\n\n=== ADDITIONAL CUSTOM GUIDELINES ===\n${customSystemPrompt}\n`;
+            systemPrompt += `\n\n=== TASK ===\n`;
+            systemPrompt += `This is your first message. You MUST start with the EXACT FIRST MESSAGE from the script.\n`;
         }
         
         // PARAGRAPH BAN (STRICT)
-        systemPrompt += `\n\n=== MANDATORY POINT-WISE ONLY (NO PARAGRAPHS) ===\n`;
-        systemPrompt += `1. **PARAGRAPH BAN**: NEVER use full paragraphs. NEVER use full sentences.\n`;
-        systemPrompt += `2. **ONLY POINTS**: Use ONLY bullet points (•) for all info.\n`;
-        systemPrompt += `3. **NO INTROS**: Don't use "We can...", "I understand", "This is...".\n`;
-        systemPrompt += `4. **FRAGMENTS**: Use max 15 words of phrase fragments total per response.\n`;
-        systemPrompt += `5. **SPLIT**: Use \\n\\n after every 1-2 points to split bubbles.\n`;
+        systemPrompt += `\n\n=== RULES ===\n`;
+        systemPrompt += `1. NO PARAGRAPHS. NO SENTENCES. FRAGMENTS ONLY.\n`;
+        systemPrompt += `2. NO BOLD. NO STARS (*). NO MARKDOWN.\n`;
+        systemPrompt += `3. NO INTROS. NO "I UNDERSTAND". NO "THAT'S NORMAL".\n`;
+        systemPrompt += `4. ONLY USE WORDS FROM THE SCRIPT IN SECTION "CONVERSATIONAL FLOW".\n`;
 
-        // 8. Add document context to system prompt
+        // 8. Add document context to system prompt (if any)
         if (contextText) {
-            systemPrompt += `\n\n=== CONTEXT FROM KNOWLEDGE BASE ===\n${contextText}\n`;
-        } else {
-            systemPrompt += `\n\n=== NOTE ===\nNo specific context available for this query. Respond based on general knowledge and conversation history.\n`;
+            systemPrompt += `\n\n=== ADDITIONAL INFO ===\n${contextText}\n`;
         }
 
         const messages = [
