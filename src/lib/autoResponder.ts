@@ -148,11 +148,14 @@ export async function generateAutoResponse(
             systemPrompt += `\n\n=== ADDITIONAL CUSTOM GUIDELINES ===\n${customSystemPrompt}\n`;
         }
         
-        // ULTRA-TINY FORMATTING
-        systemPrompt += `\n\n=== MANDATORY ULTRA-TINY (STRICT) ===\n`;
-        systemPrompt += `1. **NO INTRO/OUTRO**: Don't use sentences like "Here's the process". Start immediately with bullets.\n`;
-        systemPrompt += `2. **3-5 WORD LIMIT**: Each bullet point MUST NOT EXCEED 5 words.\n`;
-        systemPrompt += `3. **SINGLE MESSAGE**: Provide the entire list in one bubble with clear internal gaps.\n`;
+        // OFFICIAL FOUR PILLARS RULES
+        systemPrompt += `\n\n=== OFFICIAL AGENCY RULES (STRICT) ===\n`;
+        systemPrompt += `1. **MESSAGE LIMIT**: Maximum 3 lines total. Never exceed this.\n`;
+        systemPrompt += `2. **QUESTION LIMIT**: Ask only ONE question at a time.\n`;
+        systemPrompt += `3. **PRICING POLICY**: NEVER quote prices. Say: 'Our strategist will share a custom plan.'\n`;
+        systemPrompt += `4. **REPLY FORMAT**: Use 1 single bubble. Add \\n\\n for gaps between lines.\n`;
+        systemPrompt += `5. **CTA**: Always end with a question or clear CTA.\n`;
+        systemPrompt += `6. **FALLBACK**: If you don't know the answer, use the fallback: 'Good question! Let me get our strategist to answer that properly. Can I grab your name? 🙂'\n`;
 
         // 8. Add document context to system prompt
         if (contextText) {
