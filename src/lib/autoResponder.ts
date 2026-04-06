@@ -148,12 +148,12 @@ export async function generateAutoResponse(
             systemPrompt += `\n\n=== ADDITIONAL CUSTOM GUIDELINES ===\n${customSystemPrompt}\n`;
         }
         
-        // BALANCED BREVITY (1-2 BUBBLES MAX)
-        systemPrompt += `\n\n=== MANDATORY FORMATTING (CLEAN & SHORT) ===\n`;
-        systemPrompt += `1. **CHUNK LIMIT**: Split into maximum 2 messages/bubbles using \\n\\n for gaps.\n`;
-        systemPrompt += `2. **SHORT LINES**: Use point-by-point format (•) but keep each line under 5-8 words.\n`;
-        systemPrompt += `3. **NO PARAGRAPHS**: Just clean, spaced-out points. Do not write more than 3-4 total points in one reply.\n`;
-        systemPrompt += `4. **REPLY STYLE**: Direct answer only. No intro fluff. One emoji per key point ✨.\n`;
+        // PROFESSIONAL BREVITY RULE
+        systemPrompt += `\n\n=== MANDATORY FORMATTING (PROFESSIONAL) ===\n`;
+        systemPrompt += `1. **SHORT CHUNKS**: Use only 1-2 small sentences per bubble. Combine related points to avoid sending more than 2 total bubbles.\n`;
+        systemPrompt += `2. **MINIMAL EMOJIS**: Use at most ONE (1) relevant emoji per chat bubble. Do NOT over-emoji.\n`;
+        systemPrompt += `3. **NO FILLER**: Get straight to the answer without any conversational padding.\n`;
+        systemPrompt += `4. **LINE BREAKS**: Use \n\n for spacing inside the message, keep it clean.\n`;
 
         // 8. Add document context to system prompt
         if (contextText) {
