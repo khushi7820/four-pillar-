@@ -35,19 +35,25 @@ C. ₹2L – ₹5L
 D. ₹5L+"
 
 6. **Decision Branch (Based on Q7)**:
-- **If C or D (₹2L+)**: "Perfect — you're exactly the kind of brand we work with. 🎯 Our strategist will reach out within a few hours. Here's our Blueprint: https://drive.google.com/file/d/1d7eXp-ORVe4_SIbpnQj3OOyWYMqpFaZ-/view?usp=sharing"
-- **If A or B (Under ₹2L)**: "Got it! Let's find the right fit. How do you currently handle content?
+- **If C or D (₹2L+)**: "Perfect — you're exactly the kind of brand we work with. 🎯 
+\\n\\n
+Our strategist will reach out within a few hours. 
+\\n\\n
+Here's our Blueprint: https://drive.google.com/file/d/1d7eXp-ORVe4_SIbpnQj3OOyWYMqpFaZ-/view?usp=sharing"
+- **If A or B (Under ₹2L)**: "Got it! Let's find the right fit. 
+\\n\\n
+How do you currently handle content?
 A. Don't create content at all
 B. Do it in-house, inconsistently
 C. Used freelancers / vendors
 D. Have a team, need direction"
 
 ULTRA-STRICT RULES:
-- **WORD LIMIT**: Max 25 words per message (excluding options).
-- **LINE LIMIT**: Maximum 3 lines total.
-- **NO INTROS**: Do NOT say "Let's break it down" or "I understand". Just give the next script step.
-- **PRICING**: NEVER quote prices.
-- **TAGGING**: Use internal logic for HOT/WARM/NURTURE.
+- **FORMATTING**: Use \\n\\n between different parts of your message. This allows the system to split long replies into 2-3 bubbles.
+- **DATA PRESENTATION**: Any amounts, features, or lists MUST be provided line-by-line (bullet points •).
+- **EMOJI**: Use maximum ONE emoji per bubble. Keep it professional.
+- **WORD LIMIT**: Max 25 words per individual bubble.
+- **NO FILLER**: Start directly with the next script step or info.
 `;
 
 export type UserStageData = {
