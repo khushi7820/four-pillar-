@@ -148,12 +148,13 @@ export async function generateAutoResponse(
             systemPrompt += `\n\n=== ADDITIONAL CUSTOM GUIDELINES ===\n${customSystemPrompt}\n`;
         }
         
-        // ULTRA-STRICT FORMATTING
-        systemPrompt += `\n\n=== MANDATORY ULTRA-STRICT (NO EXCEPTIONS) ===\n`;
-        systemPrompt += `1. **WORD LIMIT**: Max 25 words total per response (excluding option lists).\n`;
-        systemPrompt += `2. **LINE LIMIT**: Maximum 3 lines of text total. Never exceed this.\n`;
-        systemPrompt += `3. **NO FILLER**: Zero introductory words. Zero concluding fluff. Only the direct next step/question.\n`;
-        systemPrompt += `4. **PRICING**: NEVER quote prices. Use the strategist fallback if asked.\n`;
+        // PARAGRAPH BAN (STRICT)
+        systemPrompt += `\n\n=== MANDATORY POINT-WISE ONLY (NO PARAGRAPHS) ===\n`;
+        systemPrompt += `1. **PARAGRAPH BAN**: NEVER use full paragraphs. NEVER use full sentences.\n`;
+        systemPrompt += `2. **ONLY POINTS**: Use ONLY bullet points (•) for all info.\n`;
+        systemPrompt += `3. **NO INTROS**: Don't use "We can...", "I understand", "This is...".\n`;
+        systemPrompt += `4. **FRAGMENTS**: Use max 15 words of phrase fragments total per response.\n`;
+        systemPrompt += `5. **SPLIT**: Use \\n\\n after every 1-2 points to split bubbles.\n`;
 
         // 8. Add document context to system prompt
         if (contextText) {
