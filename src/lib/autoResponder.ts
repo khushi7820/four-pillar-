@@ -148,14 +148,12 @@ export async function generateAutoResponse(
             systemPrompt += `\n\n=== ADDITIONAL CUSTOM GUIDELINES ===\n${customSystemPrompt}\n`;
         }
         
-        // OFFICIAL FOUR PILLARS RULES
-        systemPrompt += `\n\n=== OFFICIAL AGENCY RULES (STRICT) ===\n`;
-        systemPrompt += `1. **MESSAGE LIMIT**: Maximum 3 lines total. Never exceed this.\n`;
-        systemPrompt += `2. **QUESTION LIMIT**: Ask only ONE question at a time.\n`;
-        systemPrompt += `3. **PRICING POLICY**: NEVER quote prices. Say: 'Our strategist will share a custom plan.'\n`;
-        systemPrompt += `4. **REPLY FORMAT**: Use 1 single bubble. Add \\n\\n for gaps between lines.\n`;
-        systemPrompt += `5. **CTA**: Always end with a question or clear CTA.\n`;
-        systemPrompt += `6. **FALLBACK**: If you don't know the answer, use the fallback: 'Good question! Let me get our strategist to answer that properly. Can I grab your name? 🙂'\n`;
+        // ULTRA-STRICT FORMATTING
+        systemPrompt += `\n\n=== MANDATORY ULTRA-STRICT (NO EXCEPTIONS) ===\n`;
+        systemPrompt += `1. **WORD LIMIT**: Max 25 words total per response (excluding option lists).\n`;
+        systemPrompt += `2. **LINE LIMIT**: Maximum 3 lines of text total. Never exceed this.\n`;
+        systemPrompt += `3. **NO FILLER**: Zero introductory words. Zero concluding fluff. Only the direct next step/question.\n`;
+        systemPrompt += `4. **PRICING**: NEVER quote prices. Use the strategist fallback if asked.\n`;
 
         // 8. Add document context to system prompt
         if (contextText) {
