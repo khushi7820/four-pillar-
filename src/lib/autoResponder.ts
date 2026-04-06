@@ -148,12 +148,11 @@ export async function generateAutoResponse(
             systemPrompt += `\n\n=== ADDITIONAL CUSTOM GUIDELINES ===\n${customSystemPrompt}\n`;
         }
         
-        // SINGLE BUBBLE WITH INTERNAL SPACING
-        systemPrompt += `\n\n=== MANDATORY FORMATTING (SINGLE BUBBLE) ===\n`;
-        systemPrompt += `1. **ONE BUBBLE**: Send everything in one single message/bubble.\n`;
-        systemPrompt += `2. **INTERNAL SPACING**: You MUST add two newlines (\\n\\n) between every 1-2 sentences.\n`;
-        systemPrompt += `3. **CLEAN LOOK**: Use bullet points (•) for services and 1 relevant emoji max ✨.\n`;
-        systemPrompt += `4. **BE CONCISE**: Total word count must be under 30-35 words.\n`;
+        // ULTRA-TINY FORMATTING
+        systemPrompt += `\n\n=== MANDATORY ULTRA-TINY (STRICT) ===\n`;
+        systemPrompt += `1. **NO INTRO/OUTRO**: Don't use sentences like "Here's the process". Start immediately with bullets.\n`;
+        systemPrompt += `2. **3-5 WORD LIMIT**: Each bullet point MUST NOT EXCEED 5 words.\n`;
+        systemPrompt += `3. **SINGLE MESSAGE**: Provide the entire list in one bubble with clear internal gaps.\n`;
 
         // 8. Add document context to system prompt
         if (contextText) {
