@@ -224,26 +224,38 @@ export async function generateAutoResponse(
         }
 
         try {
-            // Priority 1: Groq 70B
+            // Priority 1: Groq 70B (Reliable & Fast)
             response = await tryGroq("llama-3.3-70b-versatile");
             console.log(`Groq 70B success in ${Date.now() - attemptStartTime}ms`);
         } catch (groq70Error: any) {
             console.warn("Groq 70B failed, trying Gemini...", groq70Error.message);
             try {
-                // Priority 2: Gemini
+                // Priority 2: Gemini 1.5 Flash (Latest)
                 attemptStartTime = Date.now();
-                response = await tryGemini();
+                const localGenAI = new GoogleGenerativeAI(geminiKey || "");
+                const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+                
+                const geminiMessages = messages.map(m => ({
+                    role: m.role === "system" ? "user" : (m.role === "user" ? "user" : "model"),
+                    parts: [{ text: m.content }]
+                }));
+
+                const result = await model.generateContent({
+                    contents: geminiMessages.slice(1), 
+                    systemInstruction: messages[0].content,
+                });
+                response = result.response.text();
                 console.log(`Gemini success in ${Date.now() - attemptStartTime}ms`);
             } catch (geminiError: any) {
-                console.error("Gemini also failed, trying Groq 8B...", geminiError.message);
+                console.error("Gemini failed, trying Groq 8B...", geminiError.message);
                 try {
-                    // Priority 3: Groq 8B
+                    // Priority 3: Groq 8B (Final Fallback)
                     attemptStartTime = Date.now();
                     response = await tryGroq("llama-3.1-8b-instant");
                     console.log(`Groq 8B success in ${Date.now() - attemptStartTime}ms`);
                 } catch (groq8Error: any) {
                     console.error("All AI models failed!");
-                    return { success: false, error: "AI service unavailable (Groq & Gemini failed)" };
+                    return { success: false, error: "AI service unavailable" };
                 }
             }
         }
@@ -300,11 +312,11 @@ export async function generateAutoResponse(
                             received_at: new Date().toISOString(),
                             content_type: "text",
                             content_text: chunk,
-                            sender_name: "AI Assistant",
+                            sender_name: "Four Pillars Assistant",
                             event_type: "MtMessage",
                             is_in_24_window: true,
-                            is_responded: false,
-                            auto_respond_sent: false,
+                            is_responded: true,
+                            auto_respond_sent: true,
                             raw_payload: {
                                 messageId: responseMessageId,
                                 isAutoResponse: true,
@@ -337,6 +349,7 @@ export async function generateAutoResponse(
             .from("whatsapp_messages")
             .update({
                 auto_respond_sent: true,
+                is_responded: true,
                 response_sent_at: new Date().toISOString(),
             })
             .eq("message_id", messageId);
