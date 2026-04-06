@@ -237,11 +237,34 @@ export async function generateAutoResponse(
             }
         }
 
-        // 11. Parse internal reporting tags and update state
-        const stageUpdateMatch = response.match(/\[STAGE:\s*(.*?)\]/i);
-        const infoMatches = Array.from(response.matchAll(/\[INFO:\s*(.*?)=(.*?)\]/gi));
+        // 11. FORCE PROGRESSION (Ignore AI hallucinations, follow the map)
+        const STAGE_MAP: Record<string, string> = {
+            "DISCOVERY": "SELL",
+            "SELL": "CUSTOMER",
+            "CUSTOMER": "BRANDING",
+            "BRANDING": "MARKETING",
+            "MARKETING": "GOAL",
+            "GOAL": "BUDGET",
+            "BUDGET": "NURTURE_CONTENT", // Default, Budget branching handled by AI below
+            "NURTURE_CONTENT": "NURTURE_DIGITAL",
+            "NURTURE_DIGITAL": "DISCOVERY_SESSIONS",
+            "DISCOVERY_SESSIONS": "DISCOVERY_YES"
+        };
 
-        let newStage = stageUpdateMatch ? stageUpdateMatch[1].trim() : undefined;
+        const stageUpdateMatch = response.match(/\[STAGE:\s*(.*?)\]/i);
+        let newStage = stageUpdateMatch ? stageUpdateMatch[1].trim() : STAGE_MAP[userStageData.current_stage];
+        
+        // Handle Budget Branching Manually for Safety
+        if (userStageData.current_stage === "BUDGET") {
+            const lowerRes = response.toLowerCase();
+            if (lowerRes.includes("strat") || lowerRes.includes("blueprint") || lowerRes.includes("exactly the kind")) {
+                newStage = "HOT_LEAD";
+            } else {
+                newStage = "NURTURE_CONTENT";
+            }
+        }
+
+        const infoMatches = Array.from(response.matchAll(/\[INFO:\s*(.*?)=(.*?)\]/gi));
         let newInfo: Record<string, any> = {};
         for (const match of infoMatches) {
             newInfo[match[1].trim()] = match[2].trim();
@@ -252,28 +275,8 @@ export async function generateAutoResponse(
             .replace(/\[STAGE:\s*.*?\]/gi, "")
             .replace(/\[INFO:\s*.*?=.*?\]/gi, "")
             .trim();
-        
-        // If we were supposed to be at DISCOVERY but the user replied, we assume success
-        if (userStageData.current_stage === "DISCOVERY" && !newStage) {
-            newStage = "SELL";
-        }
-        if (userStageData.current_stage === "SELL" && !newStage) {
-            newStage = "CUSTOMER";
-        }
-        if (userStageData.current_stage === "CUSTOMER" && !newStage) {
-            newStage = "BRANDING";
-        }
-        if (userStageData.current_stage === "BRANDING" && !newStage) {
-            newStage = "MARKETING";
-        }
-        if (userStageData.current_stage === "MARKETING" && !newStage) {
-            newStage = "GOAL";
-        }
-        if (userStageData.current_stage === "GOAL" && !newStage) {
-            newStage = "BUDGET";
-        }
 
-        // Always mark first message as sent after the first interaction
+        // Update database stage/info
         await updateUserConversationStage(fromNumber, toNumber, newStage, newInfo, true);
 
         // 12. SMART SPLITTING (Split into 2-3 bubbles if long)
