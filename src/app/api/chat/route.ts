@@ -4,11 +4,12 @@ import { supabase } from "@/lib/supabaseClient";
 import { embedText } from "@/lib/embeddings";
 import { retrieveRelevantChunks } from "@/lib/retrieval";
 
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY!,
-});
+export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+    const groq = new Groq({
+        apiKey: process.env.GROQ_API_KEY || "dummy_key_for_build",
+    });
     try {
         const body = await req.json();
         const { session_id, message, file_id } = body;

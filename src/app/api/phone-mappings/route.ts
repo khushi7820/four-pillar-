@@ -83,11 +83,12 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
     try {
         const { searchParams } = new URL(req.url);
-        const id = searchParams.get("id");
+        const phoneNumber = searchParams.get("phone_number");
+        const fileId = searchParams.get("file_id");
 
-        if (!id) {
+        if (!phoneNumber || !fileId) {
             return NextResponse.json(
-                { error: "Mapping id is required" },
+                { error: "phone_number and file_id are required" },
                 { status: 400 }
             );
         }
@@ -95,7 +96,7 @@ export async function DELETE(req: Request) {
         const { error } = await supabase
             .from("phone_document_mapping")
             .delete()
-            .eq("id", id);
+            .match({ phone_number: phoneNumber, file_id: fileId });
 
         if (error) {
             throw error;
@@ -105,9 +106,18 @@ export async function DELETE(req: Request) {
             success: true,
             message: "Mapping deleted successfully",
         });
-    } catch (err: unknown) {
+    } catch (err: any) {
         const message = err instanceof Error ? err.message : "Unknown error";
         console.error("DELETE_MAPPING_ERROR:", message);
-        return NextResponse.json({ error: message }, { status: 500 });
+        
+        let suggestion = null;
+        if (err.code === "PGRST204" || err.code === "42703") {
+            suggestion = "Please run fix-columns.sql in Supabase.";
+        }
+
+        return NextResponse.json({ 
+            error: message,
+            suggestion
+        }, { status: 500 });
     }
 }

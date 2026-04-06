@@ -1,55 +1,65 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
     try {
-        // Get all phone mappings with file details
+        // Step 1: Get all phone mappings
+        // We select only what we need, but we'll try to handle missing columns gracefully
         const { data: mappings, error: mappingError } = await supabase
             .from("phone_document_mapping")
-            .select(`
-                phone_number,
-                intent,
-                system_prompt,
-                auth_token,
-                origin,
-                gemini_api_key,
-                groq_api_key,
-                mistral_api_key,
-                file_id,
-                rag_files (
-                    id,
-                    name,
-                    file_type,
-                    created_at
-                )
-            `)
+            .select("*") // Selecting all to see what's available
             .order("phone_number", { ascending: true });
 
         if (mappingError) {
+            console.error("Supabase error in phone-groups:", mappingError);
             throw mappingError;
         }
 
-        // Get chunk counts for each file
-        const { data: chunkCounts, error: chunkError } = await supabase
-            .from("rag_chunks")
-            .select("file_id");
+        console.log(`Found ${mappings?.length || 0} mappings`);
 
-        if (chunkError) {
-            throw chunkError;
+        // Step 2: Collect all non-null file IDs
+        const fileIds = (mappings || [])
+            .map((m: any) => m.file_id)
+            .filter((id: string | null) => id != null);
+
+        // Step 3: Fetch file details if there are any file IDs
+        let filesMap: Record<string, any> = {};
+        if (fileIds.length > 0) {
+            const { data: files, error: filesError } = await supabase
+                .from("rag_files")
+                .select("id, name, file_type, created_at")
+                .in("id", fileIds);
+
+            if (!filesError && files) {
+                files.forEach((f: any) => {
+                    filesMap[f.id] = f;
+                });
+            }
         }
 
-        // Count chunks per file
-        const chunkCountMap: Record<string, number> = {};
-        chunkCounts?.forEach((chunk: any) => {
-            chunkCountMap[chunk.file_id] = (chunkCountMap[chunk.file_id] || 0) + 1;
-        });
+        // Step 4: Get chunk counts (try, but don't fail if table doesn't exist)
+        let chunkCountMap: Record<string, number> = {};
+        try {
+            const { data: chunkCounts, error: chunkError } = await supabase
+                .from("rag_chunks")
+                .select("file_id");
 
-        // Group by phone number
+            if (!chunkError && chunkCounts) {
+                chunkCounts.forEach((chunk: any) => {
+                    chunkCountMap[chunk.file_id] = (chunkCountMap[chunk.file_id] || 0) + 1;
+                });
+            }
+        } catch {
+            // rag_chunks table may not exist yet - continue gracefully
+        }
+
+        // Step 5: Group by phone number
         const phoneGroups: Record<string, any> = {};
 
-        mappings?.forEach((mapping: any) => {
+        (mappings || []).forEach((mapping: any) => {
             const phone = mapping.phone_number;
-            const file = mapping.rag_files;
 
             if (!phoneGroups[phone]) {
                 phoneGroups[phone] = {
@@ -65,6 +75,7 @@ export async function GET() {
                 };
             }
 
+            const file = mapping.file_id ? filesMap[mapping.file_id] : null;
             if (file) {
                 phoneGroups[phone].files.push({
                     id: file.id,

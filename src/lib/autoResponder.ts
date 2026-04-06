@@ -147,6 +147,14 @@ export async function generateAutoResponse(
         if (customSystemPrompt && customSystemPrompt.trim().length > 0) {
             systemPrompt += `\n\n=== ADDITIONAL CUSTOM GUIDELINES ===\n${customSystemPrompt}\n`;
         }
+        
+        // STRICT FORMATTING OVERRIDE
+        systemPrompt += `\n\n=== MANDATORY WHATSAPP FORMATTING (REQUIRED) ===\n`;
+        systemPrompt += `1. **NEVER** send a single block of text. Break it into small chunks.\n`;
+        systemPrompt += `2. **ALWAYS** add an empty line (\n\n) between every single point or paragraph.\n`;
+        systemPrompt += `3. **USE** bullet points (•) for lists or options.\n`;
+        systemPrompt += `4. Keep each paragraph to 1-2 lines maximum for readability.\n`;
+        systemPrompt += `5. Ensure the response looks attractive, clean, and professional.\n`;
 
         // 8. Add document context to system prompt
         if (contextText) {

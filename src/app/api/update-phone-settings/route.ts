@@ -76,12 +76,26 @@ export async function POST(req: NextRequest) {
             message: "Phone settings updated successfully",
         });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Update phone settings error:", error);
+
+        let errorMessage = error instanceof Error ? error.message : "Failed to update phone settings";
+        let suggestion = null;
+
+        // Check for specific database errors
+        if (error.code === "42703" || error.code === "PGRST204") {
+            errorMessage = "Database column 'intent' (or others like 'auth_token', 'origin') is missing from 'phone_document_mapping'.";
+            suggestion = "Please run the 'fix-columns.sql' script in your Supabase SQL editor.";
+        } else if (error.code === "42P01") {
+            errorMessage = "Database table 'phone_document_mapping' or 'rag_files' is missing.";
+            suggestion = "Please run the 'schema_setup.sql' script in your Supabase SQL editor.";
+        }
 
         return NextResponse.json(
             {
-                error: error instanceof Error ? error.message : "Failed to update phone settings",
+                error: errorMessage,
+                suggestion,
+                details: error
             },
             { status: 500 }
         );
