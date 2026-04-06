@@ -1,0 +1,527 @@
+import { supabase } from "./supabaseClient";
+import { embedText } from "./embeddings";
+import { retrieveRelevantChunksForPhoneNumber } from "./retrieval";
+import { getFilesForPhoneNumber } from "./phoneMapping";
+import { sendWhatsAppMessage } from "./whatsappSender";
+import Groq from "groq-sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { MASTER_SYSTEM_PROMPT, getUserConversationStage, updateUserConversationStage } from "./persona";
+
+const groq = new Groq({
+    apiKey: process.env.GROQ_API_KEY!,
+});
+
+const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
+
+export type AutoResponseResult = {
+    success: boolean;
+    response?: string;
+    error?: string;
+    noDocuments?: boolean;
+    sent?: boolean;
+};
+
+/**
+ * Generate an automatic response for a WhatsApp message
+ * Works with ANY custom system prompt - not limited to marketing
+ */
+export async function generateAutoResponse(
+    fromNumber: string,
+    toNumber: string,
+    messageText: string,
+    messageId: string,
+    senderName?: string
+): Promise<AutoResponseResult> {
+    try {
+        console.log(`--- Starting Fast Auto-Response for ${toNumber} ---`);
+        const startTime = Date.now();
+
+        // 1. Fetch mapping first (needed for custom API keys)
+        const mappingResult = await supabase
+            .from("phone_document_mapping")
+            .select("system_prompt, auth_token, origin, gemini_api_key, groq_api_key, mistral_api_key")
+            .eq("phone_number", toNumber)
+            .single();
+
+        const phoneMapping = mappingResult.data;
+        if (mappingResult.error || !phoneMapping) {
+            console.error("Error fetching phone mapping:", mappingResult.error);
+            return {
+                success: false,
+                error: "Failed to fetch phone mapping details or number not found",
+            };
+        }
+
+        // 2. Parallelize remaining data fetching using custom keys if available
+        const [fileIds, queryEmbedding, historyResult, userStageData] = await Promise.all([
+            getFilesForPhoneNumber(toNumber),
+            embedText(messageText, 3, phoneMapping.mistral_api_key),
+            supabase
+                .from("whatsapp_messages")
+                .select("content_text, event_type, from_number, to_number")
+                .or(`and(from_number.eq.${fromNumber},to_number.eq.${toNumber}),and(from_number.eq.${toNumber},to_number.eq.${fromNumber})`)
+                .order("received_at", { ascending: true })
+                .limit(20),
+            getUserConversationStage(fromNumber, toNumber)
+        ]);
+
+        if (fileIds.length === 0) {
+            console.log(`No documents mapped for business number: ${toNumber}`);
+            return {
+                success: false,
+                noDocuments: true,
+                error: "No documents mapped to this business number",
+            };
+        }
+
+
+        const customSystemPrompt = phoneMapping.system_prompt;
+        const auth_token = phoneMapping.auth_token;
+        const origin = phoneMapping.origin;
+
+        if (!auth_token || !origin) {
+            console.error("No credentials found for phone number");
+            return {
+                success: false,
+                error: "No WhatsApp API credentials found",
+            };
+        }
+
+        if (!queryEmbedding) {
+            return {
+                success: false,
+                error: "Failed to generate embedding",
+            };
+        }
+
+        // 2. Vector Search (Depends on embedding)
+        const matches = await retrieveRelevantChunksForPhoneNumber(
+            queryEmbedding,
+            toNumber,
+            5
+        );
+
+        const contextText = matches.length > 0 
+            ? matches.map((m) => m.chunk).join("\n\n")
+            : "";
+
+        // 3. Process history
+        const historyRows = historyResult.data || [];
+        const history = historyRows
+            .filter(m => m.content_text && (m.event_type === "MoMessage" || m.event_type === "MtMessage"))
+            .map(m => ({
+                role: m.event_type === "MoMessage" ? "user" as const : "assistant" as const,
+                content: m.content_text
+            }));
+
+        // 4. Detect language
+        const detectedLanguage = detectLanguage(messageText, history);
+        
+        console.log(`Pre-processing took ${Date.now() - startTime}ms`);
+
+        // 7. Build the system prompt using the master persona
+        let systemPrompt: string = MASTER_SYSTEM_PROMPT;
+
+        // Add current state
+        systemPrompt += `\n\n=== CURRENT CONVERSATION STATE ===\n`;
+        systemPrompt += `- Current Stage: ${userStageData.current_stage}\n`;
+        systemPrompt += `- Collected Info: ${JSON.stringify(userStageData.collected_info)}\n`;
+        systemPrompt += `- First Message Sent: ${userStageData.first_message_sent}\n`;
+        systemPrompt += `- Detected Language: ${detectedLanguage}\n`;
+
+        if (!userStageData.first_message_sent) {
+            systemPrompt += `\n\n=== FIRST MESSAGE TASK ===\n`;
+            systemPrompt += `This is your first reply ever to this user. You MUST start with the EXACT First Message defined in Section 3, then proceed to address their specific query if any.\n`;
+        }
+
+        // Add internal reporting instructions
+        systemPrompt += `\n\n=== INTERNAL REPORTING (MUST INCLUDE AT THE END OF RESPONSE) ===\n`;
+        systemPrompt += `If you identify new information or need to move to the next stage, append these to your response in square brackets (they will be hidden from the user):\n`;
+        systemPrompt += `- To update stage: [STAGE: NEW_STAGE_NAME]\n`;
+        systemPrompt += `- To save info: [INFO: key=value]\n`;
+        if (!userStageData.first_message_sent) {
+            systemPrompt += `- To mark first message as sent: [FIRST_MESSAGE_SENT: true]\n`;
+        }
+
+        // Add helpful formatting guidelines (if custom prompt exists, append it too)
+        if (customSystemPrompt && customSystemPrompt.trim().length > 0) {
+            systemPrompt += `\n\n=== ADDITIONAL CUSTOM GUIDELINES ===\n${customSystemPrompt}\n`;
+        }
+
+        // 8. Add document context to system prompt
+        if (contextText) {
+            systemPrompt += `\n\n=== CONTEXT FROM KNOWLEDGE BASE ===\n${contextText}\n`;
+        } else {
+            systemPrompt += `\n\n=== NOTE ===\nNo specific context available for this query. Respond based on general knowledge and conversation history.\n`;
+        }
+
+        // 9. Build context for the LLM
+        const visitorContext = senderName 
+            ? `\n\n=== VISITOR INFORMATION (DO NOT ADOPT THIS IDENTITY) ===\n- You are talking to: ${senderName}\n- YOUR identity is strictly limited to the role defined above.\n- NEVER assume or repeat the visitor's name as your own name.\n- Address the visitor as "${senderName}" naturally in conversation.`
+            : "";
+        
+        const messages = [
+            {
+                role: "system" as const,
+                content: `${systemPrompt}${visitorContext}`,
+            },
+            ...history.slice(-10), // Last 10 messages for context
+            { 
+                role: "user" as const, 
+                content: messageText 
+            }
+        ];
+
+        console.log(`Sending to LLM with ${messages.length} total messages`);
+
+        // 10. Generate response with Priority Swap (Gemini Primary -> Groq Fallback)
+        let response = "";
+        let attemptStartTime = Date.now();
+
+        // Use custom keys or default env vars
+        const geminiKey = phoneMapping.gemini_api_key || process.env.GEMINI_API_KEY;
+        const groqKey = phoneMapping.groq_api_key || process.env.GROQ_API_KEY;
+
+        async function tryGemini() {
+            if (!geminiKey) throw new Error("Gemini API key not configured");
+            console.log("Attempting Gemini 1.5 Flash (Primary)...");
+            const localGenAI = new GoogleGenerativeAI(geminiKey);
+            const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            
+            // Format messages for Gemini
+            const geminiMessages = messages.map(m => ({
+                role: m.role === "system" ? "user" : (m.role === "user" ? "user" : "model"),
+                parts: [{ text: m.content }]
+            }));
+
+            const result = await model.generateContent({
+                contents: geminiMessages.slice(1), 
+                systemInstruction: messages[0].content,
+            });
+            
+            return result.response.text();
+        }
+
+        async function tryGroq(model: string) {
+            if (!groqKey) throw new Error("Groq API key not configured");
+            console.log(`Attempting Groq ${model} (Fallback)...`);
+            const localGroq = new Groq({ apiKey: groqKey });
+            const completion = await localGroq.chat.completions.create({
+                model: model,
+                messages,
+                temperature: 0.7,
+                max_tokens: 1200,
+            });
+            return completion.choices[0].message.content || "";
+        }
+
+        try {
+            // Priority 1: Groq 70B
+            response = await tryGroq("llama-3.3-70b-versatile");
+            console.log(`Groq 70B success in ${Date.now() - attemptStartTime}ms`);
+        } catch (groq70Error: any) {
+            console.warn("Groq 70B failed, trying Gemini...", groq70Error.message);
+            try {
+                // Priority 2: Gemini
+                attemptStartTime = Date.now();
+                response = await tryGemini();
+                console.log(`Gemini success in ${Date.now() - attemptStartTime}ms`);
+            } catch (geminiError: any) {
+                console.error("Gemini also failed, trying Groq 8B...", geminiError.message);
+                try {
+                    // Priority 3: Groq 8B
+                    attemptStartTime = Date.now();
+                    response = await tryGroq("llama-3.1-8b-instant");
+                    console.log(`Groq 8B success in ${Date.now() - attemptStartTime}ms`);
+                } catch (groq8Error: any) {
+                    console.error("All AI models failed!");
+                    return { success: false, error: "AI service unavailable (Groq & Gemini failed)" };
+                }
+            }
+        }
+
+        // 11. Parse internal reporting tags and update state
+        const stageUpdateMatch = response.match(/\[STAGE:\s*(.*?)\]/i);
+        const infoMatches = Array.from(response.matchAll(/\[INFO:\s*(.*?)=(.*?)\]/gi));
+        const firstMessageSentMatch = response.match(/\[FIRST_MESSAGE_SENT:\s*true\]/i);
+
+        let newStage = stageUpdateMatch ? stageUpdateMatch[1].trim() : undefined;
+        let newInfo: Record<string, any> = {};
+        for (const match of infoMatches) {
+            newInfo[match[1].trim()] = match[2].trim();
+        }
+        let firstMessageSent = firstMessageSentMatch ? true : undefined;
+
+        // Clean meta-tags from response
+        response = response
+            .replace(/\[STAGE:\s*.*?\]/gi, "")
+            .replace(/\[INFO:\s*.*?=.*?\]/gi, "")
+            .replace(/\[FIRST_MESSAGE_SENT:\s*true\]/gi, "")
+            .trim();
+
+        // Update database stage/info
+        if (newStage || Object.keys(newInfo).length > 0 || firstMessageSent) {
+            await updateUserConversationStage(fromNumber, toNumber, newStage, newInfo, firstMessageSent);
+        }
+
+        // 12. Send the response via WhatsApp (Splitting into multiple messages if long)
+        // We split by double newlines or single newlines if paragraphs are long
+        const messageChunks = response
+            .split(/\n\n+/)
+            .map(chunk => chunk.trim())
+            .filter(chunk => chunk.length > 0);
+
+        console.log(`Splitting response into ${messageChunks.length} chunks`);
+
+        let allSent = true;
+        let lastError = "";
+
+        for (let i = 0; i < messageChunks.length; i++) {
+            const chunk = messageChunks[i];
+            
+            // Send to WhatsApp
+            const sendResult = await sendWhatsAppMessage(fromNumber, chunk, auth_token, origin);
+            
+            if (sendResult.success) {
+                // Store each chunk in the database
+                const responseMessageId = `auto_${messageId}_${Date.now()}_${i}`;
+                await supabase
+                    .from("whatsapp_messages")
+                    .insert([
+                        {
+                            message_id: responseMessageId,
+                            channel: "whatsapp",
+                            from_number: toNumber,
+                            to_number: fromNumber,
+                            received_at: new Date().toISOString(),
+                            content_type: "text",
+                            content_text: chunk,
+                            sender_name: "AI Assistant",
+                            event_type: "MtMessage",
+                            is_in_24_window: true,
+                            is_responded: false,
+                            auto_respond_sent: false,
+                            raw_payload: {
+                                messageId: responseMessageId,
+                                isAutoResponse: true,
+                                chunkIndex: i
+                            },
+                        },
+                    ]);
+                
+                // Add a small delay between messages to simulate typing (except for the last message)
+                if (i < messageChunks.length - 1) {
+                    const delay = Math.min(1500, 800 + (chunk.length * 5)); // Dynamic delay based on length
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            } else {
+                allSent = false;
+                lastError = sendResult.error || "Unknown error";
+                console.error(`Failed to send chunk ${i}:`, lastError);
+            }
+        }
+
+        if (!allSent && messageChunks.length > 0) {
+            return {
+                success: false,
+                response,
+                sent: false,
+                error: `Failed to send some/all chunks: ${lastError}`,
+            };
+        }
+
+        // 13. Mark original message as responded
+        await supabase
+            .from("whatsapp_messages")
+            .update({
+                auto_respond_sent: true,
+                response_sent_at: new Date().toISOString(),
+            })
+            .eq("message_id", messageId);
+
+        console.log(`✅ Auto-response chunks sent successfully to ${fromNumber}`);
+
+        return {
+            success: true,
+            response,
+            sent: true,
+        };
+    } catch (error) {
+        console.error("Auto-response error:", error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : "Unknown error",
+        };
+    }
+}
+
+/**
+ * Detect language from message and conversation history
+ */
+function detectLanguage(text: string, history: Array<{role: string, content: string}>): string {
+    const lowerText = text.toLowerCase();
+
+    // Gujarati detection
+    const gujaratiChars = /[અ-હ્]/;
+    const gujaratiWords = /\b(છે|શું|હું|તું|આ|તે|હતું|હોય|કરવું|જવું|આવવું|ખાવું|પીવું|સૂવું|બેસવું|ઊભું|રહેવું|કેમ|ક્યાં|ક્યારે|કોણ|શું|હા|ના|થોડું|ઘણું|સારું|ખરાબ|મોટું|નાનું|હેલો|નમસ્તે|ધન્યવાદ)\b/;
+    if (gujaratiChars.test(text) || gujaratiWords.test(lowerText)) {
+        return "gujarati";
+    }
+
+    // Hindi detection
+    const hindiChars = /[अ-ह्]/;
+    const hindiWords = /\b(है|हूँ|हो|कर|जा|આ|था|थी|थे|करना|जाना|आना|खाना|पीना|सोना|बैठना|खड़ा|रहना|क्या|कौन|कब|कहाँ|क्यों|कैसे|हाँ|नहीं|थोड़ा|बहुत|अच्छा|बुरा|बड़ा|छोटा|मैं|तू|वह|हम|तुम|वे|यह|ये|हेलो|नमस्ते|धन्यवाद)\b/;
+    if (hindiChars.test(text) || hindiWords.test(lowerText)) {
+        return "hindi";
+    }
+
+    // English detection
+    const englishWords = /\b(the|is|are|was|were|has|have|had|will|would|can|could|should|may|might|must|do|does|did|make|get|take|come|go|see|know|think|say|tell|work|help|need|want|use|find|give)\b/;
+    const hasEnglishWords = englishWords.test(lowerText);
+    const hasNativeScript = hindiChars.test(text) || gujaratiChars.test(text);
+
+    if (hasEnglishWords && !hasNativeScript) {
+        return "english";
+    }
+
+    // Mixed language (Hinglish)
+    if (hasEnglishWords && hasNativeScript) {
+        return "hinglish";
+    }
+
+    // Check conversation history for consistency
+    if (history.length > 0) {
+        const recentMessage = history[history.length - 1].content;
+        if (hindiChars.test(recentMessage)) return "hindi";
+        if (gujaratiChars.test(recentMessage)) return "gujarati";
+    }
+
+    // Default
+    return "english";
+}
+
+/**
+ * Generate a gentle reminder/follow-up message
+ */
+export async function generateReminderResponse(
+    fromNumber: string, // The user's number
+    toNumber: string,   // The business number
+): Promise<AutoResponseResult> {
+    try {
+        console.log(`--- Generating Reminder for ${fromNumber} (via ${toNumber}) ---`);
+        
+        // 1. Fetch mapping and history
+        const [mappingResult, historyResult] = await Promise.all([
+            supabase
+                .from("phone_document_mapping")
+                .select("system_prompt, auth_token, origin, gemini_api_key, groq_api_key, mistral_api_key")
+                .eq("phone_number", toNumber)
+                .single(),
+            supabase
+                .from("whatsapp_messages")
+                .select("content_text, event_type, from_number, to_number, raw_payload")
+                .or(`and(from_number.eq.${fromNumber},to_number.eq.${toNumber}),and(from_number.eq.${toNumber},to_number.eq.${fromNumber})`)
+                .order("received_at", { ascending: true })
+        ]);
+
+        const phoneMapping = mappingResult.data;
+        if (mappingResult.error || !phoneMapping) return { success: false, error: "Mapping not found" };
+
+        const historyRows = (historyResult.data || []).slice(-10);
+        const history = historyRows
+            .filter(m => m.content_text && (m.event_type === "MoMessage" || m.event_type === "MtMessage"))
+            .map(m => ({
+                role: m.event_type === "MoMessage" ? "user" as const : "assistant" as const,
+                content: m.content_text
+            }));
+
+        if (history.length === 0) return { success: false, error: "No history found" };
+
+        // Check if the very last message was already a reminder
+        const latestMsg = historyRows[historyRows.length - 1];
+        if (latestMsg?.raw_payload?.isReminder) {
+            console.log("Last message was already a reminder. Skipping.");
+            return { success: false, error: "Reminder already sent" };
+        }
+
+        const lastAiMessage = history.filter(h => h.role === "assistant").pop()?.content || "";
+        const detectedLanguage = detectLanguage(lastAiMessage, history);
+
+        // 2. Build reminder prompt
+        const systemPrompt = 
+            `${phoneMapping.system_prompt || "You are a helpful assistant."}\n\n` +
+            `=== REMINDER TASK ===\n` +
+            `The user hasn't responded for 30 minutes. Your task is to send a VERY SHORT, gentle nudge to re-engage them.\n` +
+            `- Be polite, non-pushy, and human-like.\n` +
+            `- Reference the last topic briefly.\n` +
+            `- Keep it to 1-2 lines MAX.\n` +
+            `- Reply in ${detectedLanguage}.\n` +
+            `- Don't sound like a bot.\n` +
+            `- Do NOT use markdown bold/bullets.\n`;
+
+        const messages = [
+            { role: "system" as const, content: systemPrompt },
+            ...history.slice(-5),
+            { role: "user" as const, content: "[SYSTEM: The user has been silent for 30 mins. Send a short, natural follow-up in their language to check if they have more questions or want to proceed.]" }
+        ];
+
+        // 3. Generate with Fallback
+        // Use custom keys or default
+        const geminiKey = phoneMapping.gemini_api_key || process.env.GEMINI_API_KEY;
+        const groqKey = phoneMapping.groq_api_key || process.env.GROQ_API_KEY;
+
+        let response = "";
+        try {
+            if (!groqKey) throw new Error("No Groq key");
+            const localGroq = new Groq({ apiKey: groqKey });
+            const completion = await localGroq.chat.completions.create({
+                model: "llama-3.3-70b-versatile",
+                messages,
+                temperature: 0.8,
+                max_tokens: 150,
+            });
+            response = completion.choices[0].message.content || "";
+        } catch (e: any) {
+            console.error("Groq reminder failed:", e.message);
+            if (geminiKey) {
+                const localGenAI = new GoogleGenerativeAI(geminiKey);
+                const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                const result = await model.generateContent({
+                    contents: messages.map(m => ({
+                        role: m.role === "system" ? "user" : (m.role === "user" ? "user" : "model"),
+                        parts: [{ text: m.content }]
+                    })).slice(1),
+                    systemInstruction: messages[0].content,
+                });
+                response = result.response.text();
+            }
+        }
+
+        if (!response) return { success: false, error: "No response generated" };
+
+        // 4. Send to WhatsApp
+        const sendResult = await sendWhatsAppMessage(fromNumber, response, phoneMapping.auth_token, phoneMapping.origin);
+
+        if (sendResult.success) {
+            const responseMessageId = `reminder_${fromNumber}_${Date.now()}`;
+            await supabase.from("whatsapp_messages").insert([{
+                message_id: responseMessageId,
+                channel: "whatsapp",
+                from_number: toNumber,
+                to_number: fromNumber,
+                received_at: new Date().toISOString(),
+                content_type: "text",
+                content_text: response,
+                sender_name: "AI Assistant",
+                event_type: "MtMessage",
+                raw_payload: { isReminder: true }
+            }]);
+            return { success: true, response, sent: true };
+        }
+
+        return { success: false, error: sendResult.error };
+    } catch (error) {
+        console.error("Reminder error:", error);
+        return { success: false, error: "Internal error" };
+    }
+}

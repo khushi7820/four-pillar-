@@ -1,0 +1,354 @@
+import { NextResponse } from "next/server";
+import { supabase } from "@/lib/supabaseClient";
+import { generateAutoResponse } from "@/lib/autoResponder";
+import OpenAI from "openai";
+// import speech from "@google-cloud/speech";
+
+import { sendWhatsAppMessage, sendWhatsAppTemplate } from "@/lib/whatsappSender";
+
+// Import our Mistral STT function
+import { transcribeAudio, TranscriptionResult } from "../../stt/mistral/route";
+
+// Type definition for WhatsApp webhook payload
+type WhatsAppWebhookPayload = {
+    messageId: string;
+    channel: string;
+    from: string;
+    to: string;
+    receivedAt: string;
+    content: {
+        contentType: string;
+        text?: string;
+        media?: {
+            type: string;
+            url: string;
+        };
+    };
+    whatsapp?: {
+        senderName?: string;
+    };
+    timestamp: string;
+    event: string;
+    isin24window?: boolean;
+    isResponded?: boolean;
+    UserResponse?: string;
+};
+
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+}) : null;
+
+// Initialize Google Speech client
+// const speechClient = new speech.SpeechClient({
+//     credentials: {
+//         client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+//         private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+//     },
+// });
+
+// Function to transcribe voice message to text using Mistral STT
+async function transcribeVoiceMessage(mediaUrl: string): Promise<{ text: string; result: TranscriptionResult } | null> {
+    try {
+        console.log("Downloading audio from:", mediaUrl);
+
+        // Download the audio file
+        const response = await fetch(mediaUrl);
+        if (!response.ok) {
+            throw new Error(`Failed to download audio: ${response.status}`);
+        }
+
+        const audioBuffer = await response.arrayBuffer();
+        console.log("Audio file size:", audioBuffer.byteLength, "bytes");
+
+        console.log("Sending to Mistral Speech-to-Text API for transcription");
+
+        // Use the imported transcribeAudio function
+        const result = await transcribeAudio(audioBuffer, 'voice-message.ogg');
+
+        const transcription = result.cleanedTranscript || result.rawTranscript;
+
+        if (!transcription) {
+            console.log("No transcription returned from Mistral STT API");
+            return null;
+        }
+
+        console.log("Transcription successful:", transcription.substring(0, 100) + (transcription.length > 100 ? "..." : ""));
+        console.log("Detected language:", result.language || 'unknown');
+
+        return { text: transcription, result };
+    } catch (error) {
+        console.error("Voice transcription failed:", error);
+        return null;
+    }
+}
+
+export async function POST(req: Request) {
+    try {
+        const payload: WhatsAppWebhookPayload = await req.json();
+
+        console.log("Received WhatsApp webhook:", payload);
+
+        // Validate required fields
+        if (!payload.messageId || !payload.from || !payload.to) {
+            return NextResponse.json(
+                { error: "Missing required fields: messageId, from, or to" },
+                { status: 400 }
+            );
+        }
+
+        // Insert or update message in database (handle duplicates)
+        const { data, error } = await supabase
+            .from("whatsapp_messages")
+            .upsert(
+                {
+                    message_id: payload.messageId,
+                    channel: payload.channel,
+                    from_number: payload.from,
+                    to_number: payload.to,
+                    received_at: payload.receivedAt,
+                    content_type: payload.content?.contentType,
+                    content_text: payload.content?.text || payload.UserResponse, // Initial text, will update if voice
+                    sender_name: payload.whatsapp?.senderName,
+                    event_type: payload.event,
+                    is_in_24_window: payload.isin24window || false,
+                    is_responded: payload.isResponded || false,
+                    raw_payload: payload,
+                },
+                {
+                    onConflict: "message_id",
+                    ignoreDuplicates: false
+                }
+            )
+            .select();
+
+        if (error) {
+            console.error("Database error:", error);
+            throw error;
+        }
+
+        console.log("Message stored/updated successfully:", data);
+
+        // Check if this message has already been responded to
+        const existingMessage = data?.[0];
+        const alreadyResponded = existingMessage?.auto_respond_sent;
+
+        // Determine message text - handle both text and voice messages
+        let messageText = payload.content?.text || payload.UserResponse;
+        // Accept both 'audio' (some providers) and 'voice' (WhatsApp voice note) as voice messages
+        const isVoiceMessage = payload.content?.contentType === "media" &&
+            (payload.content?.media?.type === "audio" || payload.content?.media?.type === "voice");
+
+        console.log("Message analysis:", {
+            contentType: payload.content?.contentType,
+            mediaType: payload.content?.media?.type,
+            hasMediaUrl: !!payload.content?.media?.url,
+            isVoiceMessage,
+            alreadyResponded,
+            event: payload.event
+        });
+
+        // Helper: send fallback reply when transcription fails or when outside 24h
+        async function sendFallbackForVoice() {
+            try {
+                // Get auth credentials for this business number
+                const { data: mapping } = await supabase
+                    .from("phone_document_mapping")
+                    .select("*")
+                    .eq("phone_number", payload.to)
+                    .single();
+
+                const authToken = mapping?.auth_token;
+                const origin = mapping?.origin;
+
+                // Mark original message as responded
+                await supabase
+                    .from("whatsapp_messages")
+                    .update({
+                        auto_respond_sent: true,
+                        response_sent_at: new Date().toISOString()
+                    })
+                    .eq("message_id", payload.messageId);
+
+                await supabase
+                    .from("whatsapp_messages")
+                    .insert([{
+                        message_id: `auto_${payload.messageId}_${Date.now()}`,
+                        channel: "whatsapp",
+                        from_number: payload.to,
+                        to_number: payload.from,
+                        received_at: new Date().toISOString(),
+                        content_type: "text",
+                        sender_name: "AI Assistant",
+                        event_type: "MtMessage",
+                        is_in_24_window: false,
+                        is_responded: false,
+                        auto_respond_sent: true,
+                        raw_payload: { messageId: payload.messageId, isAutoResponse: true }
+                    }]);
+
+            } catch (err) {
+                console.error("Error sending fallback for voice message:", err);
+            }
+        }
+
+        if (isVoiceMessage && payload.content?.media?.url && !alreadyResponded) {
+            console.log("Voice message detected, transcribing...");
+            const transcriptionResult = await transcribeVoiceMessage(payload.content.media.url);
+            if (transcriptionResult) {
+                messageText = transcriptionResult.text;
+                console.log("Using transcribed text for auto-response");
+
+                // Update the database with transcribed text and transcription details
+                await supabase
+                    .from("whatsapp_messages")
+                    .update({
+                        content_text: messageText,
+                        raw_transcript: transcriptionResult.result.rawTranscript,
+                        transcript_language: transcriptionResult.result.language,
+                        transcript_method: 'mistral-stt'
+                    })
+                    .eq("message_id", payload.messageId);
+            } else {
+                console.log("Transcription failed, sending fallback reply for voice message");
+                // Send fallback (text or template depending on 24h window)
+                await sendFallbackForVoice();
+                // Ensure we don't further process this message
+                messageText = undefined;
+            }
+        }
+
+        // Trigger auto-response for all user messages (text or transcribed voice)
+        if (messageText && payload.event === "MoMessage" && !alreadyResponded) {
+            console.log("Processing auto-response for message:", payload.messageId);
+            console.log("Message will be 24-hour window processed:", true);
+
+            try {
+                // ALWAYS try to generate a proper auto-response for user messages
+                const result = await generateAutoResponse(
+                    payload.from,
+                    payload.to,
+                    messageText,
+                    payload.messageId,
+                    payload.whatsapp?.senderName
+                );
+
+                if (result.success) {
+                    console.log("✅ Auto-response sent successfully");
+
+                    // Mark the message as responded in the database
+                    await supabase
+                        .from("whatsapp_messages")
+                        .update({
+                            auto_respond_sent: true,
+                            response_sent_at: new Date().toISOString()
+                        })
+                        .eq("message_id", payload.messageId);
+
+                } else {
+                    console.error("❌ Auto-response generation failed:", result.error);
+                    
+                    // If auto-response fails, send a helpful error message
+                    try {
+                        const { data: mapping } = await supabase
+                            .from("phone_document_mapping")
+                            .select("*")
+                            .eq("phone_number", payload.to)
+                            .single();
+
+                        const authToken = mapping?.auth_token;
+                        const origin = mapping?.origin;
+
+                        if (authToken && origin) {
+                            await sendWhatsAppMessage(
+                                payload.from,
+                                "Hi! 👋 I received your message. I'm processing your request. Please try again in a moment if you don't hear back.",
+                                authToken,
+                                origin
+                            );
+                        }
+
+                        // Log the failed attempt but mark as responded
+                        await supabase
+                            .from("whatsapp_messages")
+                            .update({
+                                auto_respond_sent: true,
+                                response_sent_at: new Date().toISOString()
+                            })
+                            .eq("message_id", payload.messageId);
+                    } catch (err) {
+                        console.error("Error sending fallback message:", err);
+                    }
+                }
+            } catch (err) {
+                console.error("Unexpected error in auto-response processing:", err);
+                
+                // Send a friendly error message
+                try {
+                    const { data: mapping } = await supabase
+                        .from("phone_document_mapping")
+                        .select("*")
+                        .eq("phone_number", payload.to)
+                        .single();
+
+                    const authToken = mapping?.auth_token;
+                    const origin = mapping?.origin;
+
+                    if (authToken && origin) {
+                        await sendWhatsAppMessage(
+                            payload.from,
+                            "Hi! 👋 I received your message. Please give me a moment to process it.",
+                            authToken,
+                            origin
+                        );
+                    }
+
+                    await supabase
+                        .from("whatsapp_messages")
+                        .update({
+                            auto_respond_sent: true,
+                            response_sent_at: new Date().toISOString()
+                        })
+                        .eq("message_id", payload.messageId);
+                } catch (innerErr) {
+                    console.error("Error sending emergency fallback:", innerErr);
+                }
+            }
+        } else if (alreadyResponded) {
+            console.log("Skipping auto-response - already sent for message:", payload.messageId);
+        }
+
+        return NextResponse.json({
+            success: true,
+            message: "WhatsApp message received and stored",
+            data: data?.[0],
+        });
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        console.error("WEBHOOK_ERROR:", message, err);
+        return NextResponse.json(
+            { error: message, details: err },
+            { status: 500 }
+        );
+    }
+}
+
+// Optional: Add GET endpoint for webhook verification (some services require this)
+export async function GET(req: Request) {
+    const { searchParams } = new URL(req.url);
+    const mode = searchParams.get("hub.mode");
+    const token = searchParams.get("hub.verify_token");
+    const challenge = searchParams.get("hub.challenge");
+
+    // Verify token (set this in your environment variables)
+    const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || "your_verify_token";
+
+    if (mode === "subscribe" && token === VERIFY_TOKEN) {
+        console.log("Webhook verified successfully");
+        return new Response(challenge, { status: 200 });
+    }
+
+    return NextResponse.json(
+        { error: "Verification failed" },
+        { status: 403 }
+    );
+}
