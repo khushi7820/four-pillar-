@@ -148,12 +148,13 @@ export async function generateAutoResponse(
             systemPrompt += `\n\n=== ADDITIONAL CUSTOM GUIDELINES ===\n${customSystemPrompt}\n`;
         }
         
-        // STRICT FORMATTING OVERRIDE
-        systemPrompt += `\n\n=== MANDATORY ULTRA-BREVITY (STRICT) ===\n`;
-        systemPrompt += `1. **MAX WORD LIMIT**: Keep your entire response UNDER 15-20 words total.\n`;
-        systemPrompt += `2. **BUBBLE LIMIT**: Send multiple short messages (1-2 sentences max) instead of one large block.\n`;
-        systemPrompt += `3. **NO FLUFF**: Don't use "I see", "That's great", etc. Get straight to the point.\n`;
-        systemPrompt += `4. ALWAYS add \n\n between different points so they split into separate bubbles.\n`;
+        // FINAL PREMIUM FORMATTING RULE
+        systemPrompt += `\n\n=== MANDATORY FORMATTING (PREMIUM) ===\n`;
+        systemPrompt += `1. **CHUNK IT**: Break your answer into multiple small points (max 1-2 lines per point).\n`;
+        systemPrompt += `2. **USE EMOJIS**: Add a single emoji ✨ related to your context in every small chunk.\n`;
+        systemPrompt += `3. **STAY ON TOPIC**: Don't change meaning. Just use modern, clear formatting.\n`;
+        systemPrompt += `4. **EMPTY LINES**: Always place \n\n between sections so they arrive as separate bubbles on WhatsApp.\n`;
+        systemPrompt += `5. **LISTS**: Use bullets (•) for presenting any services, pricing, or steps.\n`;
 
         // 8. Add document context to system prompt
         if (contextText) {
