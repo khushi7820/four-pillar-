@@ -149,12 +149,11 @@ export async function generateAutoResponse(
         }
         
         // STRICT FORMATTING OVERRIDE
-        systemPrompt += `\n\n=== MANDATORY WHATSAPP FORMATTING (REQUIRED) ===\n`;
-        systemPrompt += `1. **NEVER** send a single block of text. Break it into small chunks.\n`;
-        systemPrompt += `2. **ALWAYS** add an empty line (\n\n) between every single point or paragraph.\n`;
-        systemPrompt += `3. **USE** bullet points (•) for lists or options.\n`;
-        systemPrompt += `4. Keep each paragraph to 1-2 lines maximum for readability.\n`;
-        systemPrompt += `5. Ensure the response looks attractive, clean, and professional.\n`;
+        systemPrompt += `\n\n=== MANDATORY ULTRA-BREVITY (STRICT) ===\n`;
+        systemPrompt += `1. **MAX WORD LIMIT**: Keep your entire response UNDER 15-20 words total.\n`;
+        systemPrompt += `2. **BUBBLE LIMIT**: Send multiple short messages (1-2 sentences max) instead of one large block.\n`;
+        systemPrompt += `3. **NO FLUFF**: Don't use "I see", "That's great", etc. Get straight to the point.\n`;
+        systemPrompt += `4. ALWAYS add \n\n between different points so they split into separate bubbles.\n`;
 
         // 8. Add document context to system prompt
         if (contextText) {
