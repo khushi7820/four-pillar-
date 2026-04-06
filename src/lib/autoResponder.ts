@@ -163,15 +163,10 @@ export async function generateAutoResponse(
             systemPrompt += `\n\n=== NOTE ===\nNo specific context available for this query. Respond based on general knowledge and conversation history.\n`;
         }
 
-        // 9. Build context for the LLM
-        const visitorContext = senderName 
-            ? `\n\n=== VISITOR INFORMATION (DO NOT ADOPT THIS IDENTITY) ===\n- You are talking to: ${senderName}\n- YOUR identity is strictly limited to the role defined above.\n- NEVER assume or repeat the visitor's name as your own name.\n- Address the visitor as "${senderName}" naturally in conversation.`
-            : "";
-        
         const messages = [
             {
                 role: "system" as const,
-                content: `${systemPrompt}${visitorContext}`,
+                content: `${systemPrompt}`,
             },
             ...history.slice(-10), // Last 10 messages for context
             { 
