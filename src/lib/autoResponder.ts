@@ -200,36 +200,37 @@ export async function generateAutoResponse(
         }
 
         try {
-            // Priority 1: Groq 70B (Reliable & Fast)
-            response = await tryGroq("llama-3.3-70b-versatile");
-            console.log(`Groq 70B success in ${Date.now() - attemptStartTime}ms`);
-        } catch (groq70Error: any) {
-            console.warn("Groq 70B failed, trying Gemini...", groq70Error.message);
+            // Priority 1: Groq 8B (Ultra-Fast & High Rate Limits)
+            // Best for high traffic testing to avoid 429 errors
+            response = await tryGroq("llama-3.1-8b-instant");
+            console.log(`Groq 8B success (Primary) in ${Date.now() - attemptStartTime}ms`);
+        } catch (groq8Error: any) {
+            console.warn("Groq 8B failed, trying Groq 70B...", groq8Error.message);
             try {
-                // Priority 2: Gemini 1.5 Flash (Latest)
+                // Priority 2: Groq 70B (Reliable & Fast as Fallback)
                 attemptStartTime = Date.now();
-                const localGenAI = new GoogleGenerativeAI(geminiKey || "");
-                const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
-                
-                const geminiMessages = messages.map(m => ({
-                    role: m.role === "system" ? "user" : (m.role === "user" ? "user" : "model"),
-                    parts: [{ text: m.content }]
-                }));
-
-                const result = await model.generateContent({
-                    contents: geminiMessages.slice(1), 
-                    systemInstruction: messages[0].content,
-                });
-                response = result.response.text();
-                console.log(`Gemini success in ${Date.now() - attemptStartTime}ms`);
-            } catch (geminiError: any) {
-                console.error("Gemini failed, trying Groq 8B...", geminiError.message);
+                response = await tryGroq("llama-3.3-70b-versatile");
+                console.log(`Groq 70B success (Fallback) in ${Date.now() - attemptStartTime}ms`);
+            } catch (groq70Error: any) {
+                console.error("Groq 70B also failed, trying Gemini...", groq70Error.message);
                 try {
-                    // Priority 3: Groq 8B (Final Fallback)
+                    // Priority 3: Gemini 1.5 Flash (Final Fallback)
                     attemptStartTime = Date.now();
-                    response = await tryGroq("llama-3.1-8b-instant");
-                    console.log(`Groq 8B success in ${Date.now() - attemptStartTime}ms`);
-                } catch (groq8Error: any) {
+                    const localGenAI = new GoogleGenerativeAI(geminiKey || "");
+                    const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                    
+                    const geminiMessages = messages.map(m => ({
+                        role: m.role === "system" ? "user" : (m.role === "user" ? "user" : "model"),
+                        parts: [{ text: m.content }]
+                    }));
+
+                    const result = await model.generateContent({
+                        contents: geminiMessages.slice(1), 
+                        systemInstruction: messages[0].content,
+                    });
+                    response = result.response.text();
+                    console.log(`Gemini success in ${Date.now() - attemptStartTime}ms`);
+                } catch (geminiError: any) {
                     console.error("All AI models failed!");
                     return { success: false, error: "AI service unavailable" };
                 }
