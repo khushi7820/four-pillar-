@@ -151,10 +151,10 @@ export async function generateAutoResponse(
         systemPrompt += `1. NO PARAGRAPHS. NO SENTENCES. FRAGMENTS ONLY.\n`;
         systemPrompt += `2. NO BOLD. NO STARS (*). NO MARKDOWN.\n`;
         systemPrompt += `3. NO CHATTY BOT INTROS. ONLY USE THE SCRIPT.\n`;
-        systemPrompt += `4. GREETING IS ONLY FOR STAGE 1. Never repeat "Hey! 👋 Welcome" after line 1.\n`;
-        systemPrompt += `5. PROGRESSION: You MUST include the tag [STAGE: NEXT_STAGE_NAME] at the end of your response to move forward.\n`;
-        systemPrompt += `6. NO HALLUCINATIONS: Do not create your own questions. Only use the questions from the script.\n`;
-        systemPrompt += `7. STRICT MIRROR: Character-for-character copying only.\n`;
+        systemPrompt += `4. CURRENCY: NEVER use dollars ($). Use Rupees (₹ or Rs) only. All numbers follow the Indian system (K for Thousand, L for Lakh).\n`;
+        systemPrompt += `5. NO HALLUCINATIONS: Do not make up services or costs. Only use info from the script or "ADDITIONAL INFO".\n`;
+        systemPrompt += `6. PROGRESSION: You MUST include the tag [STAGE: NEXT_STAGE_NAME] at the end of your response.\n`;
+        systemPrompt += `7. STRICT MIRROR: Copy the script character-for-character.\n`;
         systemPrompt += `8. 2 BUBBLES MAX.\n`;
 
         // 8. Add document context to system prompt (if any)
