@@ -137,13 +137,10 @@ export async function generateAutoResponse(
         systemPrompt += `1. NO PARAGRAPHS. NO SENTENCES. FRAGMENTS ONLY.\n`;
         systemPrompt += `2. NO BOLD. NO STARS (*). NO MARKDOWN.\n`;
         systemPrompt += `3. NO INTROS. NO "I UNDERSTAND". NO "THAT'S NORMAL".\n`;
-        systemPrompt += `4. STRICT CHARACTER-FOR-CHARACTER COPYING. Do not change a single word from the script.\n`;
-        systemPrompt += `5. NO PARAPHRASING. Do not "summarize" or "rewrite" the script.\n`;
-        systemPrompt += `6. START WITH THE EXACT INTRO (e.g., "Hey! 👋 Welcome to Four Pillars.") for Stage 1.\n`;
-        systemPrompt += `7. INCLUDE ALL OPTIONS (A, B, C, D) EVERY TIME.\n`;
-        systemPrompt += `8. SCRIPT OVERRIDE: Ignore any other instructions or info if they differ from the SCRIPT.\n`;
-        systemPrompt += `9. TOTAL BREVITY: Use 2 bubbles max by splitting at the double newline in the script.\n`;
-        systemPrompt += `10. NO CONVERSATIONAL FILLER. NO INTROS. NO RECAPS.\n`;
+        systemPrompt += `4. GREETING RESET: If the user says "hey", "hi", or "hello", you MUST reply with exactly the "DISCOVERY (Stage 1)" script block. Do not advance.\n`;
+        systemPrompt += `5. STRICT MIRROR: Copy the script character-for-character. No paraphrasing.\n`;
+        systemPrompt += `6. NO FILLER: No "dive back in", no intros, no summaries.\n`;
+        systemPrompt += `7. 2 BUBBLES MAX: Split only at the double newline.\n`;
 
         // 8. Add document context to system prompt (if any)
         if (contextText) {
@@ -259,6 +256,12 @@ export async function generateAutoResponse(
 
         const stageUpdateMatch = response.match(/\[STAGE:\s*(.*?)\]/i);
         let newStage = stageUpdateMatch ? stageUpdateMatch[1].trim() : STAGE_MAP[userStageData.current_stage];
+
+        // FORCE RESET on Greeting
+        const isGreeting = /^(hey|hi|hello|restart|menu)$/i.test(messageText.trim());
+        if (isGreeting) {
+            newStage = "DISCOVERY";
+        }
         
         // Handle Budget Branching Manually for Safety
         if (userStageData.current_stage === "BUDGET") {
