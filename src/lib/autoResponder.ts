@@ -148,13 +148,13 @@ export async function generateAutoResponse(
 
         // PARAGRAPH BAN (STRICT)
         systemPrompt += `\n\n=== RULES ===\n`;
-        systemPrompt += `1. ULTRA-BLUNT: Max 25 words. Absolutely NO introductory phrases like "Let's", "We can", or "I understand".\n`;
-        systemPrompt += `2. NO EXPLANATIONS: Never explain why a service is good. Just provide facts/prices or ask the question.\n`;
-        systemPrompt += `3. FRAGMENTS ONLY: No full sentences. Use bullets or short phrases.\n`;
-        systemPrompt += `4. NO REPETITION: If you just sent a price, DO NOT repeat it.\n`;
-        systemPrompt += `5. CURRENCY: Use Rupees (₹/Rs) only.\n`;
-        systemPrompt += `6. DATA SOURCE: Only use "ADDITIONAL INFO". If missing, say you're syncing.\n`;
-        systemPrompt += `7. PROGRESSION: Include tag [STAGE: NEXT_STAGE_NAME].\n`;
+        systemPrompt += `1. PROGRESSION IS PRIORITY #1: If user picks A/B/C/D or says "both/okay", you MUST move to the next script stage immediately.\n`;
+        systemPrompt += `2. IGNORE EXTRA INFO ON CHOICES: When a choice is made, IGNORE specific pricing from "ADDITIONAL INFO". Only provide info if specifically asked.\n`;
+        systemPrompt += `3. NO REPETITION: Absolutely never send the same list of prices twice in a row.\n`;
+        systemPrompt += `4. ULTRA-BLUNT: Max 20 words. No "Since you selected...", no "Here is...". Just the next question.\n`;
+        systemPrompt += `5. FRAGMENTS ONLY: No full sentences.\n`;
+        systemPrompt += `6. CURRENCY: Rupees (₹/Rs) only.\n`;
+        systemPrompt += `7. PROGRESSION: Tag [STAGE: NEXT_STAGE_NAME] is mandatory.\n`;
         systemPrompt += `8. 2 BUBBLES MAX.\n`;
 
         // 8. Add document context to system prompt (if any)
