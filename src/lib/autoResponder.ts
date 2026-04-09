@@ -149,11 +149,11 @@ export async function generateAutoResponse(
         // PARAGRAPH BAN (STRICT)
         systemPrompt += `\n\n=== RULES ===\n`;
         systemPrompt += `1. ULTRA-BREVITY: Max 30 words total. Stop talking after the question.\n`;
-        systemPrompt += `2. SIMPLE WORDS ONLY: No "à la carte", no "comprehensive", no complex terms. Use simple English/Hinglish.\n`;
-        systemPrompt += `3. NO PARAGRAPHS. NO FULL SENTENCES. FRAGMENTS ONLY.\n`;
+        systemPrompt += `2. NO REPETITION: Do not repeat any information from the chat history. If you just sent a price list, DO NOT send it again.\n`;
+        systemPrompt += `3. CALL TO ACTION: After providing info, your next bubble must be a short question like "Ready to start?" or "Anything else?".\n`;
         systemPrompt += `4. CURRENCY: NEVER use dollars ($). Use Rupees (₹ or Rs) only.\n`;
         systemPrompt += `5. DATA SOURCE: All services/costs MUST come from "ADDITIONAL INFO". If empty, say you are syncing data.\n`;
-        systemPrompt += `6. NO CHATTY INTROS. NO FILLER.\n`;
+        systemPrompt += `6. NO FILLER: No paragraphs. Simple English/Hinglish only.\n`;
         systemPrompt += `7. PROGRESSION: Include tag [STAGE: NEXT_STAGE_NAME].\n`;
         systemPrompt += `8. 2 BUBBLES MAX.\n`;
 
