@@ -102,7 +102,7 @@ export async function generateAutoResponse(
             5
         );
 
-        const contextText = matches.length > 0 
+        const contextText = matches.length > 0
             ? matches.map((m) => m.chunk).join("\n\n")
             : "";
 
@@ -123,7 +123,7 @@ export async function generateAutoResponse(
 
         // 4. Detect language
         const detectedLanguage = detectLanguage(messageText, history);
-        
+
         console.log(`Pre-processing took ${Date.now() - startTime}ms (Gap: ${timeGapDays.toFixed(1)} days)`);
 
         // 7. Build the system prompt using the master persona ONLY
@@ -145,15 +145,15 @@ export async function generateAutoResponse(
             systemPrompt += `If they choose "START FRESH" or "NEW TOPIC", you MUST include the tag [STAGE: DISCOVERY] and restart the script.\n`;
             systemPrompt += `Reply in ${detectedLanguage}. Keep it short and natural.\n`;
         }
-        
+
         // PARAGRAPH BAN (STRICT)
         systemPrompt += `\n\n=== RULES ===\n`;
-        systemPrompt += `1. ULTRA-BREVITY: Max 30 words total. Stop talking after the question.\n`;
-        systemPrompt += `2. NO REPETITION: Do not repeat any information from the chat history. If you just sent a price list, DO NOT send it again.\n`;
-        systemPrompt += `3. CALL TO ACTION: After providing info, your next bubble must be a short question like "Ready to start?" or "Anything else?".\n`;
-        systemPrompt += `4. CURRENCY: NEVER use dollars ($). Use Rupees (₹ or Rs) only.\n`;
-        systemPrompt += `5. DATA SOURCE: All services/costs MUST come from "ADDITIONAL INFO". If empty, say you are syncing data.\n`;
-        systemPrompt += `6. NO FILLER: No paragraphs. Simple English/Hinglish only.\n`;
+        systemPrompt += `1. ULTRA-BLUNT: Max 25 words. Absolutely NO introductory phrases like "Let's", "We can", or "I understand".\n`;
+        systemPrompt += `2. NO EXPLANATIONS: Never explain why a service is good. Just provide facts/prices or ask the question.\n`;
+        systemPrompt += `3. FRAGMENTS ONLY: No full sentences. Use bullets or short phrases.\n`;
+        systemPrompt += `4. NO REPETITION: If you just sent a price, DO NOT repeat it.\n`;
+        systemPrompt += `5. CURRENCY: Use Rupees (₹/Rs) only.\n`;
+        systemPrompt += `6. DATA SOURCE: Only use "ADDITIONAL INFO". If missing, say you're syncing.\n`;
         systemPrompt += `7. PROGRESSION: Include tag [STAGE: NEXT_STAGE_NAME].\n`;
         systemPrompt += `8. 2 BUBBLES MAX.\n`;
 
@@ -168,9 +168,9 @@ export async function generateAutoResponse(
                 content: `${systemPrompt}`,
             },
             ...history.slice(-20), // Last 20 messages for context
-            { 
-                role: "user" as const, 
-                content: messageText 
+            {
+                role: "user" as const,
+                content: messageText
             }
         ];
 
@@ -189,7 +189,7 @@ export async function generateAutoResponse(
             console.log("Attempting Gemini 1.5 Flash (Primary)...");
             const localGenAI = new GoogleGenerativeAI(geminiKey);
             const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-            
+
             // Format messages for Gemini
             const geminiMessages = messages.map(m => ({
                 role: m.role === "system" ? "user" : (m.role === "user" ? "user" : "model"),
@@ -197,10 +197,10 @@ export async function generateAutoResponse(
             }));
 
             const result = await model.generateContent({
-                contents: geminiMessages.slice(1), 
+                contents: geminiMessages.slice(1),
                 systemInstruction: messages[0].content,
             });
-            
+
             return result.response.text();
         }
 
@@ -236,14 +236,14 @@ export async function generateAutoResponse(
                     attemptStartTime = Date.now();
                     const localGenAI = new GoogleGenerativeAI(geminiKey || "");
                     const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-                    
+
                     const geminiMessages = messages.map(m => ({
                         role: m.role === "system" ? "user" : (m.role === "user" ? "user" : "model"),
                         parts: [{ text: m.content }]
                     }));
 
                     const result = await model.generateContent({
-                        contents: geminiMessages.slice(1), 
+                        contents: geminiMessages.slice(1),
                         systemInstruction: messages[0].content,
                     });
                     response = result.response.text();
@@ -277,7 +277,7 @@ export async function generateAutoResponse(
         if (isGreeting) {
             newStage = "DISCOVERY";
         }
-        
+
         // Handle Budget Branching Manually for Safety
         if (userStageData.current_stage === "BUDGET") {
             const lowerRes = response.toLowerCase();
@@ -317,14 +317,14 @@ export async function generateAutoResponse(
         }
 
         console.log(`Sending response in ${messageChunks.length} bubble(s) (Capped at 2)`);
-        
+
         let allSent = true;
         let lastError = "";
 
         for (let i = 0; i < messageChunks.length; i++) {
             const chunk = messageChunks[i];
             const sendResult = await sendWhatsAppMessage(fromNumber, chunk, auth_token, origin);
-            
+
             if (sendResult.success) {
                 const responseMessageId = `auto_${messageId}_${Date.now()}_${i}`;
                 await supabase
@@ -350,7 +350,7 @@ export async function generateAutoResponse(
                             },
                         },
                     ]);
-                
+
                 // Small natural delay between bubbles
                 if (i < messageChunks.length - 1) {
                     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -399,7 +399,7 @@ export async function generateAutoResponse(
 /**
  * Detect language from message and conversation history
  */
-function detectLanguage(text: string, history: Array<{role: string, content: string}>): string {
+function detectLanguage(text: string, history: Array<{ role: string, content: string }>): string {
     const lowerText = text.toLowerCase();
 
     // Gujarati detection
@@ -450,7 +450,7 @@ export async function generateReminderResponse(
 ): Promise<AutoResponseResult> {
     try {
         console.log(`--- Generating Reminder for ${fromNumber} (via ${toNumber}) ---`);
-        
+
         // 1. Fetch mapping and history
         const [mappingResult, historyResult] = await Promise.all([
             supabase
@@ -491,7 +491,7 @@ export async function generateReminderResponse(
         const detectedLanguage = detectLanguage(lastAiMessage, history);
 
         // 2. Build reminder prompt
-        const systemPrompt = 
+        const systemPrompt =
             `${phoneMapping.system_prompt || "You are a helpful assistant."}\n\n` +
             `=== REMINDER TASK ===\n` +
             `The user hasn't responded for 30 minutes. Your task is to send a VERY SHORT, gentle nudge to re-engage them.\n` +
