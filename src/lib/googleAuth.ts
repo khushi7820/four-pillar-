@@ -23,29 +23,30 @@ export function createGoogleJwt(scopes: string[] = []) {
     // 2. Strip surrounding quotes (if any)
     finalKey = finalKey.replace(/^"|"$/g, "");
 
-    // 3. Find the actual start of the PEM key (handles cases where junk is before it)
-    const beginIndex = finalKey.indexOf("-----BEGIN");
-    if (beginIndex > -1) {
-      finalKey = finalKey.substring(beginIndex);
-    } else {
-      console.warn("GOOGLE_PRIVATE_KEY does not contain -----BEGIN");
-    }
-
-    // 4. Handle escaped newlines (\n) and normalize Windows-style CRLF
+    // 3. Handle escaped newlines
     finalKey = finalKey.replace(/\\n/g, "\n").replace(/\r\n/g, "\n");
 
-    // 5. Robust reconstruction to fix ERR_OSSL_UNSUPPORTED
-    // Some platforms (like Vercel UI) strip newlines or replace them with spaces.
+    // 4. Extract and rebuild to fix ERR_OSSL_UNSUPPORTED
+    let header = "-----BEGIN PRIVATE KEY-----";
+    let footer = "-----END PRIVATE KEY-----";
+    let bodyClean = "";
+
     const keyMatch = finalKey.match(/(-----BEGIN [A-Z ]+-----)([\s\S]*?)(-----END [A-Z ]+-----)/);
     if (keyMatch) {
-      const header = keyMatch[1];
-      const footer = keyMatch[3];
-      // Strip all whitespace from the base64 body payload
-      const bodyClean = keyMatch[2].replace(/\s+/g, "");
-      // Re-chunk to 64 characters per line
-      const bodyChunked = bodyClean.match(/.{1,64}/g)?.join("\n") || bodyClean;
-      finalKey = `${header}\n${bodyChunked}\n${footer}\n`;
+      header = keyMatch[1];
+      bodyClean = keyMatch[2];
+      footer = keyMatch[3];
+    } else {
+      console.warn("Google Auth: Missing PEM headers, wrapping base64 payload automatically...");
+      bodyClean = finalKey;
     }
+
+    // Strip ALL whitespace/newlines from the payload
+    bodyClean = bodyClean.replace(/\s+/g, "");
+    
+    // Automatically chunk to 64 characters per line
+    const bodyChunked = bodyClean.match(/.{1,64}/g)?.join("\n") || bodyClean;
+    finalKey = `${header}\n${bodyChunked}\n${footer}\n`;
 
     console.info(`Google Auth: Key prepared, length: ${finalKey.length}`);
     key = finalKey;
