@@ -137,7 +137,8 @@ export async function generateAutoResponse(
         systemPrompt += `1. NO PARAGRAPHS. NO SENTENCES. FRAGMENTS ONLY.\n`;
         systemPrompt += `2. NO BOLD. NO STARS (*). NO MARKDOWN.\n`;
         systemPrompt += `3. NO INTROS. NO "I UNDERSTAND". NO "THAT'S NORMAL".\n`;
-        systemPrompt += `4. ONLY USE WORDS FROM THE SCRIPT IN SECTION "CONVERSATIONAL FLOW".\n`;
+        systemPrompt += `4. ONLY USE WORDS FROM THE SCRIPT.\n`;
+        systemPrompt += `5. BE EXTREMELY BRIEF. Use 2 sections max.\n`;
 
         // 8. Add document context to system prompt (if any)
         if (contextText) {
@@ -279,13 +280,20 @@ export async function generateAutoResponse(
         // Update database stage/info
         await updateUserConversationStage(fromNumber, toNumber, newStage, newInfo, true);
 
-        // 12. SMART SPLITTING (Split into 2-3 bubbles if long)
-        const messageChunks = response
+        // 12. SMART SPLITTING (MAX 2 BUBBLES)
+        let messageChunks = response
             .split(/\n\n+/)
             .map(chunk => chunk.trim())
             .filter(chunk => chunk.length > 0);
 
-        console.log(`Sending response in ${messageChunks.length} bubble(s)`);
+        // Force exactly 2 bubbles if more are generated
+        if (messageChunks.length > 2) {
+            const first = messageChunks[0];
+            const rest = messageChunks.slice(1).join("\n\n");
+            messageChunks = [first, rest];
+        }
+
+        console.log(`Sending response in ${messageChunks.length} bubble(s) (Capped at 2)`);
         
         let allSent = true;
         let lastError = "";
