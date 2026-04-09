@@ -137,10 +137,11 @@ export async function generateAutoResponse(
         systemPrompt += `1. NO PARAGRAPHS. NO SENTENCES. FRAGMENTS ONLY.\n`;
         systemPrompt += `2. NO BOLD. NO STARS (*). NO MARKDOWN.\n`;
         systemPrompt += `3. NO INTROS. NO "I UNDERSTAND". NO "THAT'S NORMAL".\n`;
-        systemPrompt += `4. GREETING RESET: If the user says "hey", "hi", or "hello", you MUST reply with exactly the "DISCOVERY (Stage 1)" script block. Do not advance.\n`;
-        systemPrompt += `5. STRICT MIRROR: Copy the script character-for-character. No paraphrasing.\n`;
-        systemPrompt += `6. NO FILLER: No "dive back in", no intros, no summaries.\n`;
-        systemPrompt += `7. 2 BUBBLES MAX: Split only at the double newline.\n`;
+        systemPrompt += `3. NO CHATTY BOT INTROS (like "Sure, here's the info"). ONLY USE THE SCRIPT.\n`;
+        systemPrompt += `4. GREETING IS MANDATORY: You MUST start Stage 1 with "Hey! 👋 Welcome to Four Pillars." Do not trim it.\n`;
+        systemPrompt += `5. GREETING RESET: If the user says "hey", "hi", or "hello", reply with the EXACT Stage 1 script block.\n`;
+        systemPrompt += `6. STRICT MIRROR: Copy every word of the script character-for-character.\n`;
+        systemPrompt += `7. TOTAL BREVITY: Use 2 bubbles max by splitting only at double newlines.\n`;
 
         // 8. Add document context to system prompt (if any)
         if (contextText) {
