@@ -138,11 +138,12 @@ export async function generateAutoResponse(
         systemPrompt += `2. NO BOLD. NO STARS (*). NO MARKDOWN.\n`;
         systemPrompt += `3. NO INTROS. NO "I UNDERSTAND". NO "THAT'S NORMAL".\n`;
         systemPrompt += `4. ONLY USE WORDS FROM THE SCRIPT. NO EXCEPTIONS.\n`;
-        systemPrompt += `5. IGNORE ALL PREVIOUS MESSAGE STYLES. Do not copy the tone or length of earlier messages.\n`;
-        systemPrompt += `6. SCRIPT OVERRIDE: Script blocks always take priority over "ADDITIONAL INFO". If they conflict, follow the SCRIPT BLOCKS.\n`;
-        systemPrompt += `7. NO CONVERSATIONAL FILLER. NO "DIVE BACK IN". NO RECAPS. NO SUMMARIES.\n`;
-        systemPrompt += `8. TOTAL BREVITY: Use 2 sections max. If the script has more, combine them.\n`;
-        systemPrompt += `9. DO NOT BE HELPFUL. DO NOT BE CHATTY. BE A SCRIPT PLAYER ONLY.\n`;
+        systemPrompt += `5. COPY THE ENTIRE SCRIPT BLOCK. Never skip the question or the options (A, B, C, D).\n`;
+        systemPrompt += `6. IGNORE ALL PREVIOUS MESSAGE STYLES. Do not copy the tone or length of earlier messages.\n`;
+        systemPrompt += `7. SCRIPT OVERRIDE: Script blocks always take priority over "ADDITIONAL INFO".\n`;
+        systemPrompt += `8. NO CONVERSATIONAL FILLER. NO "DIVE BACK IN". NO RECAPS. NO SUMMARIES.\n`;
+        systemPrompt += `9. TOTAL BREVITY: Use 2 sections max. If the script has more, combine them into 2 bubbles.\n`;
+        systemPrompt += `10. DO NOT BE HELPFUL. DO NOT BE CHATTY. BE A SCRIPT PLAYER ONLY.\n`;
 
         // 8. Add document context to system prompt (if any)
         if (contextText) {
