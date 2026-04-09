@@ -136,12 +136,12 @@ export async function generateAutoResponse(
         systemPrompt += `\n\n=== RULES ===\n`;
         systemPrompt += `1. NO PARAGRAPHS. NO SENTENCES. FRAGMENTS ONLY.\n`;
         systemPrompt += `2. NO BOLD. NO STARS (*). NO MARKDOWN.\n`;
-        systemPrompt += `3. NO INTROS. NO "I UNDERSTAND". NO "THAT'S NORMAL".\n`;
-        systemPrompt += `3. NO CHATTY BOT INTROS (like "Sure, here's the info"). ONLY USE THE SCRIPT.\n`;
-        systemPrompt += `4. GREETING IS MANDATORY: You MUST start Stage 1 with "Hey! 👋 Welcome to Four Pillars." Do not trim it.\n`;
-        systemPrompt += `5. GREETING RESET: If the user says "hey", "hi", or "hello", reply with the EXACT Stage 1 script block.\n`;
-        systemPrompt += `6. STRICT MIRROR: Copy every word of the script character-for-character.\n`;
-        systemPrompt += `7. TOTAL BREVITY: Use 2 bubbles max by splitting only at double newlines.\n`;
+        systemPrompt += `3. NO CHATTY BOT INTROS. ONLY USE THE SCRIPT.\n`;
+        systemPrompt += `4. GREETING IS ONLY FOR STAGE 1. Never repeat "Hey! 👋 Welcome" after line 1.\n`;
+        systemPrompt += `5. PROGRESSION: You MUST include the tag [STAGE: NEXT_STAGE_NAME] at the end of your response to move forward.\n`;
+        systemPrompt += `6. NO HALLUCINATIONS: Do not create your own questions. Only use the questions from the script.\n`;
+        systemPrompt += `7. STRICT MIRROR: Character-for-character copying only.\n`;
+        systemPrompt += `8. 2 BUBBLES MAX.\n`;
 
         // 8. Add document context to system prompt (if any)
         if (contextText) {
