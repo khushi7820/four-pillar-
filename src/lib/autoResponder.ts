@@ -106,8 +106,14 @@ export async function generateAutoResponse(
             ? matches.map((m) => m.chunk).join("\n\n")
             : "";
 
-        // 3. Process history
+        // 1.5 Calculate Time Gap
         const historyRows = historyResult.data || [];
+        const lastMsg = historyRows[historyRows.length - 1];
+        const lastMessageAt = lastMsg ? new Date(lastMsg.received_at).getTime() : 0;
+        const timeGapDays = lastMessageAt > 0 ? (Date.now() - lastMessageAt) / (1000 * 60 * 60 * 24) : 0;
+        const isReturningUser = timeGapDays > 3;
+
+        // 3. Process history
         const history = historyRows
             .filter(m => m.content_text && (m.event_type === "MoMessage" || m.event_type === "MtMessage"))
             .map(m => ({
@@ -118,7 +124,7 @@ export async function generateAutoResponse(
         // 4. Detect language
         const detectedLanguage = detectLanguage(messageText, history);
         
-        console.log(`Pre-processing took ${Date.now() - startTime}ms`);
+        console.log(`Pre-processing took ${Date.now() - startTime}ms (Gap: ${timeGapDays.toFixed(1)} days)`);
 
         // 7. Build the system prompt using the master persona ONLY
         // We IGNORE custom prompts to ensure the script mirror is perfect
@@ -131,6 +137,13 @@ export async function generateAutoResponse(
         if (!userStageData.first_message_sent) {
             systemPrompt += `\n\n=== TASK ===\n`;
             systemPrompt += `This is your first message. You MUST start with the EXACT FIRST MESSAGE from the script.\n`;
+        } else if (isReturningUser) {
+            systemPrompt += `\n\n=== RE-ENGAGEMENT TASK ===\n`;
+            systemPrompt += `The user has returned after ${timeGapDays.toFixed(0)} days. \n`;
+            systemPrompt += `If they are asking a DIFFERENT question or about a different service than before, you MUST ask: \n`;
+            systemPrompt += `"Would you like to continue our previous conversation, or should we start fresh with this new inquiry?"\n`;
+            systemPrompt += `If they choose "START FRESH" or "NEW TOPIC", you MUST include the tag [STAGE: DISCOVERY] and restart the script.\n`;
+            systemPrompt += `Reply in ${detectedLanguage}. Keep it short and natural.\n`;
         }
         
         // PARAGRAPH BAN (STRICT)
