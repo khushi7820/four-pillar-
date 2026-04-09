@@ -137,13 +137,13 @@ export async function generateAutoResponse(
         systemPrompt += `1. NO PARAGRAPHS. NO SENTENCES. FRAGMENTS ONLY.\n`;
         systemPrompt += `2. NO BOLD. NO STARS (*). NO MARKDOWN.\n`;
         systemPrompt += `3. NO INTROS. NO "I UNDERSTAND". NO "THAT'S NORMAL".\n`;
-        systemPrompt += `4. ONLY USE WORDS FROM THE SCRIPT. NO EXCEPTIONS.\n`;
-        systemPrompt += `5. COPY THE ENTIRE SCRIPT BLOCK. Never skip the question or the options (A, B, C, D).\n`;
-        systemPrompt += `6. IGNORE ALL PREVIOUS MESSAGE STYLES. Do not copy the tone or length of earlier messages.\n`;
-        systemPrompt += `7. SCRIPT OVERRIDE: Script blocks always take priority over "ADDITIONAL INFO".\n`;
-        systemPrompt += `8. NO CONVERSATIONAL FILLER. NO "DIVE BACK IN". NO RECAPS. NO SUMMARIES.\n`;
-        systemPrompt += `9. TOTAL BREVITY: Use 2 sections max. If the script has more, combine them into 2 bubbles.\n`;
-        systemPrompt += `10. DO NOT BE HELPFUL. DO NOT BE CHATTY. BE A SCRIPT PLAYER ONLY.\n`;
+        systemPrompt += `4. STRICT CHARACTER-FOR-CHARACTER COPYING. Do not change a single word from the script.\n`;
+        systemPrompt += `5. NO PARAPHRASING. Do not "summarize" or "rewrite" the script.\n`;
+        systemPrompt += `6. START WITH THE EXACT INTRO (e.g., "Hey! 👋 Welcome to Four Pillars.") for Stage 1.\n`;
+        systemPrompt += `7. INCLUDE ALL OPTIONS (A, B, C, D) EVERY TIME.\n`;
+        systemPrompt += `8. SCRIPT OVERRIDE: Ignore any other instructions or info if they differ from the SCRIPT.\n`;
+        systemPrompt += `9. TOTAL BREVITY: Use 2 bubbles max by splitting at the double newline in the script.\n`;
+        systemPrompt += `10. NO CONVERSATIONAL FILLER. NO INTROS. NO RECAPS.\n`;
 
         // 8. Add document context to system prompt (if any)
         if (contextText) {
