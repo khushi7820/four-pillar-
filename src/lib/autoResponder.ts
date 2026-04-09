@@ -137,8 +137,11 @@ export async function generateAutoResponse(
         systemPrompt += `1. NO PARAGRAPHS. NO SENTENCES. FRAGMENTS ONLY.\n`;
         systemPrompt += `2. NO BOLD. NO STARS (*). NO MARKDOWN.\n`;
         systemPrompt += `3. NO INTROS. NO "I UNDERSTAND". NO "THAT'S NORMAL".\n`;
-        systemPrompt += `4. ONLY USE WORDS FROM THE SCRIPT.\n`;
-        systemPrompt += `5. BE EXTREMELY BRIEF. Use 2 sections max.\n`;
+        systemPrompt += `4. ONLY USE WORDS FROM THE SCRIPT. NO EXCEPTIONS.\n`;
+        systemPrompt += `5. IGNORE ALL PREVIOUS MESSAGE STYLES. Do not copy the tone or length of earlier messages.\n`;
+        systemPrompt += `6. NO CONVERSATIONAL FILLER. NO "DIVE BACK IN". NO RECAPS. NO SUMMARIES.\n`;
+        systemPrompt += `7. TOTAL BREVITY: Use 2 sections max. If the script has more, combine them.\n`;
+        systemPrompt += `8. DO NOT BE HELPFUL. DO NOT BE CHATTY. BE A SCRIPT PLAYER ONLY.\n`;
 
         // 8. Add document context to system prompt (if any)
         if (contextText) {
