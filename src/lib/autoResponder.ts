@@ -130,9 +130,26 @@ export async function generateAutoResponse(
         // We IGNORE custom prompts to ensure the script mirror is perfect
         let systemPrompt: string = MASTER_SYSTEM_PROMPT;
 
+        // Define stage progression map
+        const STAGE_MAP: Record<string, string> = {
+            "DISCOVERY": "SELL",
+            "SELL": "CUSTOMER",
+            "CUSTOMER": "BRANDING",
+            "BRANDING": "MARKETING",
+            "MARKETING": "GOAL",
+            "GOAL": "BUDGET",
+            "BUDGET": "HOT_LEAD",
+            "NURTURE_CONTENT": "NURTURE_DIGITAL",
+            "NURTURE_DIGITAL": "DISCOVERY_SESSIONS",
+            "DISCOVERY_SESSIONS": "HOT_LEAD"
+        };
+        const nextStage = STAGE_MAP[userStageData.current_stage] || userStageData.current_stage;
+
         // Add current state (for AI's internal knowledge ONLY)
         systemPrompt += `\n\n=== CONTEXT ===\n`;
         systemPrompt += `- Detected Language: ${detectedLanguage}\n`;
+        systemPrompt += `- Current Stage: ${userStageData.current_stage}\n`;
+        systemPrompt += `- Next Expected Stage: ${nextStage}\n`;
 
         if (!userStageData.first_message_sent) {
             systemPrompt += `\n\n=== TASK ===\n`;
@@ -256,19 +273,6 @@ export async function generateAutoResponse(
         }
 
         // 11. FORCE PROGRESSION (Ignore AI hallucinations, follow the map)
-        const STAGE_MAP: Record<string, string> = {
-            "DISCOVERY": "SELL",
-            "SELL": "CUSTOMER",
-            "CUSTOMER": "BRANDING",
-            "BRANDING": "MARKETING",
-            "MARKETING": "GOAL",
-            "GOAL": "BUDGET",
-            "BUDGET": "NURTURE_CONTENT", // Default, Budget branching handled by AI below
-            "NURTURE_CONTENT": "NURTURE_DIGITAL",
-            "NURTURE_DIGITAL": "DISCOVERY_SESSIONS",
-            "DISCOVERY_SESSIONS": "DISCOVERY_YES"
-        };
-
         const stageUpdateMatch = response.match(/\[STAGE:\s*(.*?)\]/i);
         let newStage = stageUpdateMatch ? stageUpdateMatch[1].trim() : STAGE_MAP[userStageData.current_stage];
 
