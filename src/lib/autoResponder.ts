@@ -58,10 +58,11 @@ export async function generateAutoResponse(
             embedText(messageText, 3, phoneMapping.mistral_api_key),
             supabase
                 .from("whatsapp_messages")
-                .select("content_text, event_type, from_number, to_number")
+                .select("content_text, event_type, from_number, to_number, received_at")
                 .or(`and(from_number.eq.${fromNumber},to_number.eq.${toNumber}),and(from_number.eq.${toNumber},to_number.eq.${fromNumber})`)
+                .gte("received_at", new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString())
                 .order("received_at", { ascending: true })
-                .limit(20),
+                .limit(40),
             getUserConversationStage(fromNumber, toNumber)
         ]);
 
@@ -153,7 +154,7 @@ export async function generateAutoResponse(
                 role: "system" as const,
                 content: `${systemPrompt}`,
             },
-            ...history.slice(-10), // Last 10 messages for context
+            ...history.slice(-20), // Last 20 messages for context
             { 
                 role: "user" as const, 
                 content: messageText 
@@ -448,7 +449,9 @@ export async function generateReminderResponse(
                 .from("whatsapp_messages")
                 .select("content_text, event_type, from_number, to_number, raw_payload")
                 .or(`and(from_number.eq.${fromNumber},to_number.eq.${toNumber}),and(from_number.eq.${toNumber},to_number.eq.${fromNumber})`)
+                .gte("received_at", new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString())
                 .order("received_at", { ascending: true })
+                .limit(40)
         ]);
 
         const phoneMapping = mappingResult.data;
