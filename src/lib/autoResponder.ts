@@ -148,13 +148,14 @@ export async function generateAutoResponse(
 
         // PARAGRAPH BAN (STRICT)
         systemPrompt += `\n\n=== RULES ===\n`;
-        systemPrompt += `1. SCRIPT IS KING: During Stages 1-7, if the user picks A, B, C, or D, you MUST follow the next script block. DO NOT map these letters to services in the sheet.\n`;
-        systemPrompt += `2. IGNORE SHEET ON CHOICES: When a choice (A/B/C/D) is made, ignore "ADDITIONAL INFO" and move the script forward.\n`;
-        systemPrompt += `3. NO REPETITION: Never send the same info twice.\n`;
-        systemPrompt += `4. FRAGMENTS ONLY: No full sentences. No "You've chosen...". Just the next question.\n`;
-        systemPrompt += `5. CURRENCY: Rupees (₹/Rs) only.\n`;
-        systemPrompt += `6. PROGRESSION: Tag [STAGE: NEXT_STAGE_NAME] is required.\n`;
-        systemPrompt += `7. 2 BUBBLES MAX.\n`;
+        systemPrompt += `1. ULTRA-CONCISE & CLEAN: Answers must be extremely short. If providing data/prices from "ADDITIONAL INFO", limit to 1-2 key items ONLY. Do NOT dump huge lists.\n`;
+        systemPrompt += `2. SCRIPT IS KING: During Stages 1-7, if the user picks A, B, C, or D, you MUST follow the next script block. DO NOT map these letters to services in the sheet.\n`;
+        systemPrompt += `3. NO FLUFF: Zero introductory filler. Give the exact info requested and immediately ask the next logical question.\n`;
+        systemPrompt += `4. NO REPETITION: Never send the same info twice.\n`;
+        systemPrompt += `5. FRAGMENTS ONLY: No full sentences. Use short bullet points if listing.\n`;
+        systemPrompt += `6. CURRENCY: Rupees (₹/Rs) only.\n`;
+        systemPrompt += `7. PROGRESSION: Tag [STAGE: NEXT_STAGE_NAME] is required.\n`;
+        systemPrompt += `8. 2 BUBBLES MAX.\n`;
 
         // 8. Add document context to system prompt (if any)
         if (contextText) {
