@@ -34,6 +34,19 @@ export function createGoogleJwt(scopes: string[] = []) {
     // 4. Handle escaped newlines (\n) and normalize Windows-style CRLF
     finalKey = finalKey.replace(/\\n/g, "\n").replace(/\r\n/g, "\n");
 
+    // 5. Robust reconstruction to fix ERR_OSSL_UNSUPPORTED
+    // Some platforms (like Vercel UI) strip newlines or replace them with spaces.
+    const keyMatch = finalKey.match(/(-----BEGIN [A-Z ]+-----)([\s\S]*?)(-----END [A-Z ]+-----)/);
+    if (keyMatch) {
+      const header = keyMatch[1];
+      const footer = keyMatch[3];
+      // Strip all whitespace from the base64 body payload
+      const bodyClean = keyMatch[2].replace(/\s+/g, "");
+      // Re-chunk to 64 characters per line
+      const bodyChunked = bodyClean.match(/.{1,64}/g)?.join("\n") || bodyClean;
+      finalKey = `${header}\n${bodyChunked}\n${footer}\n`;
+    }
+
     console.info(`Google Auth: Key prepared, length: ${finalKey.length}`);
     key = finalKey;
   } else {
