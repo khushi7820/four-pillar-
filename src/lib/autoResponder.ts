@@ -165,14 +165,13 @@ export async function generateAutoResponse(
 
         // PARAGRAPH BAN (STRICT)
         systemPrompt += `\n\n=== RULES ===\n`;
-        systemPrompt += `1. ULTRA-CONCISE & CLEAN: Answers must be extremely short. Limit data/prices from "ADDITIONAL INFO" to 1-2 items ONLY.\n`;
-        systemPrompt += `2. NEVER REPEAT QUESTIONS: If the user replies (even with just "okay"), you MUST move forward to the next question in the script. NEVER ask the same question twice.\n`;
-        systemPrompt += `3. SCRIPT IS KING: During Stages 1-7, if the user picks A/B/C/D, move to the next stage immediately. DO NOT extract sheet data for those.\n`;
-        systemPrompt += `4. NO FLUFF: Zero intros. Zero explanations.\n`;
-        systemPrompt += `5. FRAGMENTS ONLY: No full sentences.\n`;
+        systemPrompt += `1. NATURAL BUT CONCISE: Acknowledge what the user said naturally. Don't sound like a robot, but keep answers extremely short (1-2 sentences max).\n`;
+        systemPrompt += `2. SHEET-BASED FACTS: When providing services or costs, use ONLY the "ADDITIONAL INFO" provided. NEVER make up numbers.\n`;
+        systemPrompt += `3. NEVER REPEAT QUESTIONS: If the user replies, you MUST move forward to the next question. NEVER ask the same question twice.\n`;
+        systemPrompt += `4. SCRIPT PROGRESSION: During custom flows, always smoothly transition to the next step. Tag [STAGE: NEXT_STAGE_NAME] is required.\n`;
+        systemPrompt += `5. NO FLUFF: No long explanations or marketing speak.\n`;
         systemPrompt += `6. CURRENCY: Rupees (₹/Rs) only.\n`;
-        systemPrompt += `7. PROGRESSION: Tag [STAGE: NEXT_STAGE_NAME] is required.\n`;
-        systemPrompt += `8. 2 BUBBLES MAX.\n`;
+        systemPrompt += `7. 2 BUBBLES MAX.\n`;
 
         // 8. Add document context to system prompt (if any)
         if (contextText) {
