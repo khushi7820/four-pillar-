@@ -148,15 +148,14 @@ export async function generateAutoResponse(
         
         // PARAGRAPH BAN (STRICT)
         systemPrompt += `\n\n=== RULES ===\n`;
-        systemPrompt += `1. NO PARAGRAPHS. NO SENTENCES. FRAGMENTS ONLY.\n`;
-        systemPrompt += `2. NO BOLD. NO STARS (*). NO MARKDOWN.\n`;
-        systemPrompt += `3. NO CHATTY BOT INTROS. ONLY USE THE SCRIPT.\n`;
+        systemPrompt += `1. ULTRA-BREVITY: Max 30 words total. Stop talking after the question.\n`;
+        systemPrompt += `2. SIMPLE WORDS ONLY: No "à la carte", no "comprehensive", no complex terms. Use simple English/Hinglish.\n`;
+        systemPrompt += `3. NO PARAGRAPHS. NO FULL SENTENCES. FRAGMENTS ONLY.\n`;
         systemPrompt += `4. CURRENCY: NEVER use dollars ($). Use Rupees (₹ or Rs) only.\n`;
-        systemPrompt += `5. DATA SOURCE: All services, costs, and packages MUST come from "ADDITIONAL INFO". If "ADDITIONAL INFO" is empty or missing data, say: "I'm currently syncing your latest data. Please give me a moment to fetch the exact details."\n`;
-        systemPrompt += `6. NO HALLUCINATIONS: Do not make up services or prices from your own memory.\n`;
-        systemPrompt += `7. PROGRESSION: Include the tag [STAGE: NEXT_STAGE_NAME].\n`;
-        systemPrompt += `8. STRICT MIRROR: Copy script blocks character-for-character.\n`;
-        systemPrompt += `9. 2 BUBBLES MAX.\n`;
+        systemPrompt += `5. DATA SOURCE: All services/costs MUST come from "ADDITIONAL INFO". If empty, say you are syncing data.\n`;
+        systemPrompt += `6. NO CHATTY INTROS. NO FILLER.\n`;
+        systemPrompt += `7. PROGRESSION: Include tag [STAGE: NEXT_STAGE_NAME].\n`;
+        systemPrompt += `8. 2 BUBBLES MAX.\n`;
 
         // 8. Add document context to system prompt (if any)
         if (contextText) {
