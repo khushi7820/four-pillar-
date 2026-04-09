@@ -20,33 +20,15 @@ export function createGoogleJwt(scopes: string[] = []) {
       }
     }
 
-    // 2. Strip surrounding quotes (if any)
-    finalKey = finalKey.replace(/^"|"$/g, "");
+    // 3. Handle escaped newlines (standard fix for Vercel / .env)
+    finalKey = finalKey.replace(/\\n/g, "\n");
 
-    // 3. Handle escaped newlines
-    finalKey = finalKey.replace(/\\n/g, "\n").replace(/\r\n/g, "\n");
-
-    // 4. Extract and rebuild to fix ERR_OSSL_UNSUPPORTED
-    let header = "-----BEGIN PRIVATE KEY-----";
-    let footer = "-----END PRIVATE KEY-----";
-    let bodyClean = "";
-
-    const keyMatch = finalKey.match(/(-----BEGIN [A-Z ]+-----)([\s\S]*?)(-----END [A-Z ]+-----)/);
-    if (keyMatch) {
-      header = keyMatch[1];
-      bodyClean = keyMatch[2];
-      footer = keyMatch[3];
-    } else {
-      console.warn("Google Auth: Missing PEM headers, wrapping base64 payload automatically...");
-      bodyClean = finalKey;
+    if (!finalKey.includes("-----BEGIN")) {
+      console.error("CRITICAL AUTH ERROR: Your GOOGLE_PRIVATE_KEY in .env.local is completely malformed. It MUST contain '-----BEGIN PRIVATE KEY-----'. You likely pasted the wrong value, truncated it, or missed the headers.");
+      throw new Error("GOOGLE_PRIVATE_KEY is malformed in environment variables.");
     }
 
-    // Strip ALL whitespace/newlines from the payload
-    bodyClean = bodyClean.replace(/\s+/g, "");
-    
-    // Automatically chunk to 64 characters per line
-    const bodyChunked = bodyClean.match(/.{1,64}/g)?.join("\n") || bodyClean;
-    finalKey = `${header}\n${bodyChunked}\n${footer}\n`;
+    key = finalKey;
 
     console.info(`Google Auth: Key prepared, length: ${finalKey.length}`);
     key = finalKey;
