@@ -148,14 +148,13 @@ export async function generateAutoResponse(
 
         // PARAGRAPH BAN (STRICT)
         systemPrompt += `\n\n=== RULES ===\n`;
-        systemPrompt += `1. PROGRESSION IS PRIORITY #1: If user picks A/B/C/D or says "both/okay", you MUST move to the next script stage immediately.\n`;
-        systemPrompt += `2. IGNORE EXTRA INFO ON CHOICES: When a choice is made, IGNORE specific pricing from "ADDITIONAL INFO". Only provide info if specifically asked.\n`;
-        systemPrompt += `3. NO REPETITION: Absolutely never send the same list of prices twice in a row.\n`;
-        systemPrompt += `4. ULTRA-BLUNT: Max 20 words. No "Since you selected...", no "Here is...". Just the next question.\n`;
-        systemPrompt += `5. FRAGMENTS ONLY: No full sentences.\n`;
-        systemPrompt += `6. CURRENCY: Rupees (₹/Rs) only.\n`;
-        systemPrompt += `7. PROGRESSION: Tag [STAGE: NEXT_STAGE_NAME] is mandatory.\n`;
-        systemPrompt += `8. 2 BUBBLES MAX.\n`;
+        systemPrompt += `1. NO REPETITION: Absolutely never repeat information you just sent. If the user says "okay" or "go on", move to the next step, do not repeat prices.\n`;
+        systemPrompt += `2. NEW QUES ONLY: Answer ONLY what the user asked in their latest message. If they didn't ask a question, move the script forward.\n`;
+        systemPrompt += `3. SHEET-BASED: Use only "ADDITIONAL INFO" for services/costs. Be concise but provide all requested details.\n`;
+        systemPrompt += `4. FRAGMENTS ONLY: No paragraphs. Use bullets for lists.\n`;
+        systemPrompt += `5. CURRENCY: Rupees (₹/Rs) only.\n`;
+        systemPrompt += `6. PROGRESSION: Tag [STAGE: NEXT_STAGE_NAME] is required to move the script forward.\n`;
+        systemPrompt += `7. 2 BUBBLES MAX.\n`;
 
         // 8. Add document context to system prompt (if any)
         if (contextText) {
