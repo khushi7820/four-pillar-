@@ -176,7 +176,15 @@ export async function generateAutoResponse(
 
         // Link is no longer blacklisted
 
-        let nextStage = STAGE_MAP[userStageData.current_stage] || userStageData.current_stage;
+        // Only advance if the user actually responded with an option (A, B, C, D) or a variation
+        const isAnswer = /^[a-d][\.\)]?\s*$/i.test(messageText.trim()) || 
+                         messageText.length > 50 || // Long descriptive answers count
+                         /^(yes|no|tell me more|let's do it|sure|okay|ok)$/i.test(messageText.trim());
+
+        let nextStage = userStageData.current_stage;
+        if (isAnswer) {
+            nextStage = STAGE_MAP[userStageData.current_stage] || userStageData.current_stage;
+        }
 
         // Custom Budget Branching Logic (Before any bypasses)
         if (userStageData.current_stage === "BUDGET") {
