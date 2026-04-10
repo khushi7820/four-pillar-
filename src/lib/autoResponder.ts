@@ -165,7 +165,8 @@ export async function generateAutoResponse(
             "BUDGET": "HOT_LEAD",
             "NURTURE_CONTENT": "NURTURE_DIGITAL",
             "NURTURE_DIGITAL": "DISCOVERY_SESSIONS",
-            "DISCOVERY_SESSIONS": "HOT_LEAD",
+            "DISCOVERY_SESSIONS": "WARM_LEAD",
+            "NURTURE_AUDIT": "INTENT_CAPTURE",
             "PROMPT_CONTINUE": "DISCOVERY" 
         };
 
@@ -185,6 +186,27 @@ export async function generateAutoResponse(
                 nextStage = "NURTURE_CONTENT";
             } else {
                 nextStage = "HOT_LEAD";
+            }
+        }
+
+        // Branching for Stage 11 (DISCOVERY_SESSIONS)
+        if (userStageData.current_stage === "DISCOVERY_SESSIONS") {
+            const msgLower = messageText.toLowerCase();
+            if (msgLower === "b" || msgLower.includes("not right now") || msgLower.includes("no") || msgLower.includes("later")) {
+                nextStage = "NURTURE_AUDIT";
+            } else {
+                nextStage = "WARM_LEAD";
+            }
+        }
+
+        // Branching for Stage 13 (NURTURE_AUDIT)
+        if (userStageData.current_stage === "NURTURE_AUDIT") {
+            const msgLower = messageText.toLowerCase();
+            if (msgLower === "a" || msgLower.includes("yes") || msgLower.includes("let")) {
+                nextStage = "INTENT_CAPTURE";
+            } else {
+                // Stay here and let assistant mode take over
+                nextStage = "NURTURE_AUDIT";
             }
         }
         if (isGreeting) {
@@ -219,7 +241,9 @@ export async function generateAutoResponse(
             systemPrompt += `[STAGE: ${userStageData.current_stage}]\n`; // Retain the real stage secretly
         }
 
-        const isCaptured = nextStage === "HOT_LEAD" || userStageData.current_stage === "HOT_LEAD";
+        const capturedStages = ["HOT_LEAD", "WARM_LEAD", "INTENT_CAPTURE"];
+        const isCaptured = capturedStages.includes(nextStage) || capturedStages.includes(userStageData.current_stage);
+
         if (isCaptured) {
             systemPrompt += `
 \n\n=== CRITICAL FINAL COMMAND (ASSISTANT MODE) ===
@@ -277,8 +301,8 @@ export async function generateAutoResponse(
             response = `"Welcome back! Would you like to continue our previous conversation, or should we start fresh?"\n[STAGE: ${userStageData.current_stage}]`;
             bypassedLLM = true;
             console.log("⚡ Bypassing LLM for PROMPT_CONTINUE greeting");
-        } else if (!isCaptured || (nextStage === "HOT_LEAD" && userStageData.current_stage !== "HOT_LEAD")) {
-            // Bypass the LLM for ALL standard script stages, including the HOT_LEAD destination (first entry only)!
+        } else if (!isCaptured || (capturedStages.includes(nextStage) && !capturedStages.includes(userStageData.current_stage))) {
+            // Bypass the LLM for ALL standard script stages, including terminal destinations (first entry only)!
             const lines = MASTER_SYSTEM_PROMPT.split('\n');
             let isCapturingBlock = false;
             let capturedLines = [];
