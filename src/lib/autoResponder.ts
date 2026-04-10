@@ -174,6 +174,9 @@ export async function generateAutoResponse(
         const isStartFresh = /^(start fresh|fresh one|fresh|new topic|new|restart|start new|start over|start again)$/i.test(messageText.trim());
         const isContinue = /^(continue|same|old|yes|y)$/i.test(messageText.trim());
 
+        // 7.5 BLACKLIST BROKEN LINK
+        const BROKEN_LINK = "https://drive.google.com/file/d/1d7eXp-ORve4_SlbpnQj3OOyWYMqpFaZ-/view?usp=sharing";
+
         let nextStage = STAGE_MAP[userStageData.current_stage] || userStageData.current_stage;
 
         if (isGreeting) {
@@ -228,6 +231,14 @@ export async function generateAutoResponse(
         if (nextStage === "PROMPT_CONTINUE") {
             systemPrompt += `SPECIAL TASK: The user said hello. Offer to continue the conversation: "Would you like to continue our previous conversation, or should we start fresh?" [STAGE: ${userStageData.current_stage}]\n`;
         }
+
+        if (isStartFresh) {
+            systemPrompt += `\n\n=== CRITICAL EMERGENCY RULE ===\n`;
+            systemPrompt += `1. The user wants to START FRESH. You MUST output ONLY the script for [Stage: DISCOVERY].\n`;
+            systemPrompt += `2. DO NOT introduce yourself. DO NOT say "Starting fresh!". Just output the Discovery text.\n`;
+        }
+
+        systemPrompt += `\n\n3. LINK BAN: NEVER use the link "${BROKEN_LINK}". It is broken. Only use links from SCRIPT/KNOWLEDGE BASE.\n`;
 
         const messages = [
             {
