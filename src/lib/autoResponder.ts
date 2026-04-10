@@ -263,6 +263,13 @@ export async function generateAutoResponse(
         const geminiKey = phoneMapping.gemini_api_key || process.env.GEMINI_API_KEY;
         const groqKey = phoneMapping.groq_api_key || process.env.GROQ_API_KEY;
 
+        if (groqKey) {
+            const keySource = phoneMapping.groq_api_key ? "DATABASE" : "ENV_VAR";
+            console.log(`🔑 Groq Key Source: ${keySource} | ID: ...${groqKey.slice(-4)}`);
+        } else {
+            console.warn("⚠️ No Groq API key found!");
+        }
+
         async function tryGroq(model: "llama-3.3-70b-versatile" | "llama-3.1-8b-instant") {
             if (!groqKey) throw new Error("Groq API key not configured");
             console.log(`Attempting Groq ${model}...`);
