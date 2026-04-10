@@ -197,15 +197,8 @@ export async function generateAutoResponse(
         console.log(`➡️ Calculated Next Stage: ${nextStage} (Current: ${userStageData.current_stage})`);
 
         // 9. Build the System Prompt
-        let systemPrompt = `
-=== CRITICAL EMERGENCY RULES (MANDATORY) ===
-1. ACT AS A COPY-PASTE MACHINE. You are NOT an assistant right now. You are running a script.
-2. YOUR ONLY JOB is to output the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section below. 
-3. DO NOT CHAT. DO NOT process the user's input. DO NOT explain their choice. DO NOT say "You chose..." or "Let's break it down."
-4. Start your message IMMEDIATELY with the script text. NOTHING ELSE.
-5. STAGE TAG: You MUST end your message with this exact tag: [STAGE: ${nextStage}]
-`;
-
+        let systemPrompt = `ROLE: You are the Official Script Player.`;
+        
         systemPrompt += MASTER_SYSTEM_PROMPT;
         systemPrompt += customContent;
 
@@ -223,6 +216,15 @@ export async function generateAutoResponse(
             systemPrompt += `The lead has been captured. Do NOT use the script anymore. Move into "Assistant Mode".\n`;
             systemPrompt += `1. Answer concisely using ONLY 4-5 bullet points or lines.\n`;
             systemPrompt += `2. NO CHATBOT FLUFF: No long intros. Start with the answer.\n`;
+        } else {
+             systemPrompt += `
+\n\n=== CRITICAL FINAL COMMAND (MANDATORY) ===
+1. ACT AS A DUMB COPY-PASTE MACHINE. You are NOT an assistant.
+2. YOUR ONLY JOB is to output the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section above. 
+3. DO NOT CHAT. DO NOT process the user's input. DO NOT explain their choice. DO NOT say "You chose..." or "Let's break it down."
+4. Start your message IMMEDIATELY with the script text. NOTHING ELSE.
+5. STAGE TAG: You MUST end your message with this exact tag: [STAGE: ${nextStage}]
+`;           
         }
 
         if (isStartFresh) {
