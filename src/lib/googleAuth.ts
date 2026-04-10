@@ -7,7 +7,10 @@ export function createGoogleJwt(scopes: string[] = []) {
   if (key) {
     let finalKey = key.trim();
 
-    // 1. Detect if it's a full JSON service account
+    // 1. Strip surrounding quotes (Next.js .env might not strip them in Vercel when copy-pasted)
+    finalKey = finalKey.replace(/^["']|["']$/g, '');
+
+    // 2. Detect if it's a full JSON service account
     if (finalKey.startsWith("{")) {
       try {
         console.info("Google Auth: Detected JSON service account, extracting private_key.");
@@ -23,9 +26,6 @@ export function createGoogleJwt(scopes: string[] = []) {
         console.error("Google Auth: Failed to parse GOOGLE_PRIVATE_KEY as JSON", err);
       }
     }
-
-    // 2. Strip surrounding quotes (Next.js .env might not strip them)
-    finalKey = finalKey.replace(/^["']|["']$/g, '');
 
     // 3. Handle escaped newlines (standard fix for Vercel / .env)
     finalKey = finalKey.replace(/\\n/g, "\n").replace(/\r\n/g, "\n");
