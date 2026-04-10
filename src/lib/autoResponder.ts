@@ -186,20 +186,28 @@ export async function generateAutoResponse(
         systemPrompt += `- Current Stage: ${userStageData.current_stage}\n`;
         systemPrompt += `- Next Expected Stage: ${nextStage}\n`;
 
-        if (!userStageData.first_message_sent) {
+        if (nextStage === "HOT_LEAD" || userStageData.current_stage === "HOT_LEAD") {
             systemPrompt += `\n\n=== TASK ===\n`;
-            systemPrompt += `This is your first message. You MUST output EXACTLY the "DISCOVERY" stage text.\n`;
-        }
+            systemPrompt += `The lead has been captured. Do NOT use the script anymore. Move into "Assistant Mode".\n`;
+            systemPrompt += `1. Be helpful, warm, and natural. No more stage tags unless the user wants to start over.\n`;
+            systemPrompt += `2. Answer any follow-up questions using ONLY the BUSINESS PROFILE and ADDITIONAL INFO provided.\n`;
+            systemPrompt += `3. If the user says thanks/ok, just wish them a great day and say the team will call them.\n`;
+        } else {
+            if (!userStageData.first_message_sent) {
+                systemPrompt += `\n\n=== TASK ===\n`;
+                systemPrompt += `This is your first message. You MUST output EXACTLY the "DISCOVERY" stage text.\n`;
+            }
 
-        // STRICT SCRIPT ENFORCEMENT
-        systemPrompt += `\n\n=== STRICT RULES ===\n`;
-        systemPrompt += `1. NO CHATBOT BEHAVIOR: Do not be chatty. Do not summarize. Do not acknowledge their answer.\n`;
-        systemPrompt += `2. COPY PASTE ONLY: Your ONLY job is to output the EXACT text for the Next Expected Stage (${nextStage}) from the SCRIPT BLOCKS above.\n`;
+            // STRICT SCRIPT ENFORCEMENT
+            systemPrompt += `\n\n=== STRICT RULES ===\n`;
+            systemPrompt += `1. NO CHATBOT BEHAVIOR: Do not be chatty. Do not summarize. Do not acknowledge their answer.\n`;
+            systemPrompt += `2. COPY PASTE ONLY: Your ONLY job is to output the EXACT text for the Next Expected Stage (${nextStage}) from the SCRIPT BLOCKS above.\n`;
+        }
         
         if (nextStage === "PROMPT_CONTINUE") {
             systemPrompt += `3. SPECIAL TASK: The user said hello. You MUST ONLY output this exact question: "Would you like to continue our previous conversation, or should we start fresh with this new inquiry?"\n`;
             systemPrompt += `4. ALWAYS include the tag [STAGE: ${userStageData.current_stage}] at the end so we keep their old place saved.\n`;
-        } else {
+        } else if (nextStage !== "HOT_LEAD" && userStageData.current_stage !== "HOT_LEAD") {
             systemPrompt += `3. DO NOT MAKE UP PLANS: Never invent pricing, plans, or services. Just output the script block.\n`;
             systemPrompt += `4. SCRIPT PROGRESSION: Always include the tag [STAGE: ${nextStage}] at the end of your message so the database updates.\n`;
             systemPrompt += `5. If the next stage is HOT_LEAD, just output the HOT_LEAD text and stop.\n`;
