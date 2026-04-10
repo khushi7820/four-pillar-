@@ -149,11 +149,10 @@ export async function generateAutoResponse(
 
         console.log(`Pre-processing took ${Date.now() - startTime}ms (Gap: ${timeGapDays.toFixed(1)} days)`);
 
-        // 7. Build the system prompt using the master instructions
-        let systemPrompt: string = MASTER_SYSTEM_PROMPT;
-        
+        // 7. Get any custom prompt from the sheet
+        let customContent = "";
         if (customSystemPrompt) {
-            systemPrompt += `\n\n=== BUSINESS PROFILE & CUSTOM SCRIPT ===\n${customSystemPrompt}\n`;
+            customContent = `\n\n=== BUSINESS PROFILE & CUSTOM SCRIPT ===\n${customSystemPrompt}\n`;
         }
 
         const STAGE_MAP: Record<string, string> = {
@@ -207,9 +206,14 @@ export async function generateAutoResponse(
 `;
 
         systemPrompt += MASTER_SYSTEM_PROMPT;
-        
-        if (customSystemPrompt) {
-            systemPrompt += `\n\n=== BUSINESS PROFILE & CUSTOM SCRIPT ===\n${customSystemPrompt}\n`;
+        systemPrompt += customContent;
+
+        if (nextStage === "PROMPT_CONTINUE") {
+            systemPrompt += `\n\n=== SPECIAL TASK (GREETING) ===\n`;
+            systemPrompt += `The user said hello, but you already have a history with them.\n`;
+            systemPrompt += `You MUST output EXACTLY this text:\n`;
+            systemPrompt += `"Welcome back! Would you like to continue our previous conversation, or should we start fresh?"\n`;
+            systemPrompt += `[STAGE: ${userStageData.current_stage}]\n`; // Retain the real stage secretly
         }
 
         const isCaptured = nextStage === "HOT_LEAD" || userStageData.current_stage === "HOT_LEAD";
