@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 
 export function createGoogleJwt(scopes: string[] = []) {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  let email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   let key = process.env.GOOGLE_PRIVATE_KEY;
 
   if (key) {
@@ -14,6 +14,10 @@ export function createGoogleJwt(scopes: string[] = []) {
         const json = JSON.parse(finalKey);
         if (json.private_key) {
           finalKey = json.private_key;
+        }
+        if (json.client_email) {
+          email = json.client_email;
+          console.info(`Google Auth: Extracted client_email from JSON: ${email}`);
         }
       } catch (err) {
         console.error("Google Auth: Failed to parse GOOGLE_PRIVATE_KEY as JSON", err);
