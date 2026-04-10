@@ -178,8 +178,8 @@ export async function generateAutoResponse(
 
         // Only advance if the user actually responded with an option (A, B, C, D) or a variation
         const isAnswer = /^[a-d][\.\)]?\s*$/i.test(messageText.trim()) || 
-                         messageText.length > 50 || // Long descriptive answers count
-                         /^(yes|no|tell me more|let's do it|sure|okay|ok)$/i.test(messageText.trim());
+                         messageText.length > 40 || // Significant input counts as answer
+                         /^(yes|no|tell me more|let's do it|sure|okay|ok|starting|stage|scale|visibility|product|service|saas|both|consumers|businesses|logo|consistent|haven't|results|partner|campaigns|awareness|leads|sales|community|system)$/i.test(messageText.trim());
 
         let nextStage = userStageData.current_stage;
         if (isAnswer) {
