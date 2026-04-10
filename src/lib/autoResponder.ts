@@ -305,11 +305,17 @@ export async function generateAutoResponse(
         let response = "";
         let bypassedLLM = false;
 
+        const isTerminalStage = capturedStages.includes(nextStage);
+        const wasTerminalStage = capturedStages.includes(userStageData.current_stage);
+        
+        // FORCE BYPASS for all standard script stages (1-11), or when first entering a terminal stage
+        const forceScriptBypass = !isTerminalStage || (isTerminalStage && !wasTerminalStage);
+
         if (nextStage === "PROMPT_CONTINUE") {
             response = `"Welcome back! Would you like to continue our previous conversation, or should we start fresh?"\n[STAGE: ${userStageData.current_stage}]`;
             bypassedLLM = true;
             console.log("⚡ Bypassing LLM for PROMPT_CONTINUE greeting");
-        } else if (!isCaptured || (capturedStages.includes(nextStage) && !capturedStages.includes(userStageData.current_stage))) {
+        } else if (forceScriptBypass) {
             // Bypass the LLM for ALL standard script stages, including terminal destinations (first entry only)!
             const lines = MASTER_SYSTEM_PROMPT.split('\n');
             let isCapturingBlock = false;
