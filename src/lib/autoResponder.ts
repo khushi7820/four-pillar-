@@ -133,6 +133,20 @@ export async function generateAutoResponse(
         // 4. Detect language
         const detectedLanguage = detectLanguage(messageText, history);
 
+        // 4.5 CLEAN HISTORY: Find the last 'start fresh' command to ensure a clean slate
+        const startFreshRegex = /^(start fresh|fresh one|fresh|new topic|new|restart|start new|start over|start again)$/i;
+        let lastFreshIndex = -1;
+        for (let i = history.length - 1; i >= 0; i--) {
+            if (history[i].role === "user" && startFreshRegex.test(history[i].content.trim())) {
+                lastFreshIndex = i;
+                break;
+            }
+        }
+        
+        // If the current message IS a start fresh, or we found one in history, slice accordingly
+        const cleanHistoryChunks = lastFreshIndex !== -1 ? history.slice(lastFreshIndex + 1) : history;
+        const finalHistory = cleanHistoryChunks.slice(-10); // Still limit to 10 for rate limits
+
         console.log(`Pre-processing took ${Date.now() - startTime}ms (Gap: ${timeGapDays.toFixed(1)} days)`);
 
         // 7. Build the system prompt using the master instructions
@@ -170,8 +184,9 @@ export async function generateAutoResponse(
                 nextStage = "PROMPT_CONTINUE";
             }
         } else if (isStartFresh) {
-            console.log("🆕 Start fresh detected");
+            console.log("🆕 Start fresh detected. WIPING history for this prompt.");
             nextStage = "DISCOVERY";
+            // Important: We don't slice the actual DB history, but we slice what we send to the LLM
         } else if (isContinue) {
             console.log("🔄 Continue detected");
             nextStage = userStageData.current_stage;
@@ -219,7 +234,7 @@ export async function generateAutoResponse(
                 role: "system" as const,
                 content: `${systemPrompt}`,
             },
-            ...history.slice(-10), // Reduced to 10 messages to avoid Groq Rate Limits
+            ...(isStartFresh ? [] : finalHistory), // Use cleaned history
             {
                 role: "user" as const,
                 content: messageText
