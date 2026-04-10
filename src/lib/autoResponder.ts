@@ -205,7 +205,7 @@ export async function generateAutoResponse(
 
         systemPrompt += `\n\n=== FINAL DATA FOR THIS RESPONSE ===\n`;
         systemPrompt += `- User Language: ${detectedLanguage}\n`;
-        systemPrompt += `- Current Stage: ${userStageData.current_stage}\n`;
+        systemPrompt += `- Current Stage: ${isStartFresh ? "DISCOVERY" : userStageData.current_stage}\n`;
         systemPrompt += `- Target Stage: ${nextStage}\n`;
 
         if (nextStage === "HOT_LEAD" || userStageData.current_stage === "HOT_LEAD") {
@@ -236,6 +236,7 @@ export async function generateAutoResponse(
             systemPrompt += `\n\n=== CRITICAL EMERGENCY RULE ===\n`;
             systemPrompt += `1. The user wants to START FRESH. You MUST output ONLY the script for [Stage: DISCOVERY].\n`;
             systemPrompt += `2. DO NOT introduce yourself. DO NOT say "Starting fresh!". Just output the Discovery text.\n`;
+            systemPrompt += `3. IGNORE all previous "Collected Info" like budget, goals, or branding status.\n`;
         }
 
         systemPrompt += `\n\n3. LINK BAN: NEVER use the link "${BROKEN_LINK}". It is broken. Only use links from SCRIPT/KNOWLEDGE BASE.\n`;
