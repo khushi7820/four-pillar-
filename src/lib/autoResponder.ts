@@ -131,16 +131,38 @@ export async function generateAutoResponse(
         let systemPrompt: string = phoneMapping.system_prompt || MASTER_SYSTEM_PROMPT;
 
 
+        // 7.5 Parse Flow Transitions from the system prompt (Sync from Sheet)
+        const STAGE_TRANSITIONS: Record<string, string> = {};
+        const flowMatches = systemPrompt.match(/\[FLOW:\s*(.*?)\]/);
+        if (flowMatches) {
+            const flowPairs = flowMatches[1].split(",").map(p => p.trim());
+            for (const pair of flowPairs) {
+                const [curr, next] = pair.split("->").map(s => s.trim());
+                if (curr && next) STAGE_TRANSITIONS[curr.toUpperCase()] = next.toUpperCase();
+            }
+        }
+
+        const isGreeting = /^(hey|hi|hello|menu|hy|hyy|hii|hiii|heyy|heyyy|namaste|kem cho|kese ho|kaise ho)$/i.test(messageText.trim());
+        const currentStage = (userStageData.current_stage || "DISCOVERY").toUpperCase();
+        
+        let targetStage = STAGE_TRANSITIONS[currentStage] || currentStage;
+
+        // If it's a greeting and we haven't sent the first message, always start at DISCOVERY
+        if (isGreeting && !userStageData.first_message_sent) {
+            targetStage = "DISCOVERY";
+        }
+
         // Add current state (for AI's internal knowledge ONLY)
         systemPrompt += `\n\n=== CONTEXT ===\n`;
         systemPrompt += `- Detected Language: ${detectedLanguage}\n`;
-        systemPrompt += `- Current Stage: ${userStageData.current_stage}\n`;
+        systemPrompt += `- Current Stage: ${currentStage}\n`;
+        systemPrompt += `- Target Stage: ${targetStage}\n`;
 
         // STRICT SCRIPT ENFORCEMENT
         systemPrompt += `\n\n=== STRICT RULES ===\n`;
         systemPrompt += `1. NO CHATBOT BEHAVIOR: Do not be chatty. Do not summarize. Do not acknowledge their answer.\n`;
-        systemPrompt += `2. COPY PASTE ONLY: Your ONLY job is to output the EXACT text for the next appropriate stage from the SCRIPT BLOCKS above.\n`;
-        systemPrompt += `3. ALWAYS include the tag [STAGE: STAGE_NAME] at the end of your message so we keep their place saved.\n`;
+        systemPrompt += `2. COPY PASTE ONLY: Your ONLY job is to output the EXACT text for the Target Stage (${targetStage}) from the SCRIPT BLOCKS above.\n`;
+        systemPrompt += `3. ALWAYS include the tag [STAGE: ${targetStage}] at the end of your message so we keep their place saved.\n`;
 
         // 8. Add document context to system prompt (if any)
         if (contextText) {
@@ -159,7 +181,7 @@ export async function generateAutoResponse(
             }
         ];
 
-        console.log(`Sending to LLM with ${messages.length} total messages.`);
+        console.log(`Sending to LLM. Target Stage: ${targetStage}`);
 
         // 10. Generate response with Priority Swap (Gemini Primary -> Groq Fallback)
         let response = "";
@@ -222,8 +244,8 @@ export async function generateAutoResponse(
 
         // 11. FORCE PROGRESSION (Ignore AI hallucinations, follow the map)
         const stageUpdateMatch = response.match(/\[STAGE:\s*(.*?)\]/i);
-        // If AI gives a tag, use it. Otherwise, stay in current stage
-        let newStage = stageUpdateMatch ? stageUpdateMatch[1].trim() : userStageData.current_stage;
+        // If AI gives a tag, use it. Otherwise, use targetStage we calculated
+        let newStage = stageUpdateMatch ? stageUpdateMatch[1].trim().toUpperCase() : targetStage;
 
         const infoMatches = Array.from(response.matchAll(/\[INFO:\s*(.*?)=(.*?)\]/gi));
         let newInfo: Record<string, any> = {};

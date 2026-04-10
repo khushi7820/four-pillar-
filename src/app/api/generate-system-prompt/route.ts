@@ -133,7 +133,6 @@ ${flowTag}
 === RULES ===
 1. NO BOLD (*). NO STARS.
 2. NO CHATTY INTROS.
-3. BE EXTREMELY BRIEF.
 3. BE EXTREMELY BRIEF.`;
 
         return persona;
