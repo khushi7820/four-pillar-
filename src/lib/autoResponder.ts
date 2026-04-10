@@ -176,15 +176,7 @@ export async function generateAutoResponse(
 
         // Link is no longer blacklisted
 
-        // Only advance if the user actually responded with an option (A, B, C, D) or a variation
-        const isAnswer = /^[a-d][\.\)]?\s*$/i.test(messageText.trim()) || 
-                         messageText.length > 40 || // Significant input counts as answer
-                         /^(yes|no|tell me more|let's do it|sure|okay|ok|starting|stage|scale|visibility|product|service|saas|both|consumers|businesses|logo|consistent|haven't|results|partner|campaigns|awareness|leads|sales|community|system)$/i.test(messageText.trim());
-
-        let nextStage = userStageData.current_stage;
-        if (isAnswer) {
-            nextStage = STAGE_MAP[userStageData.current_stage] || userStageData.current_stage;
-        }
+        let nextStage = STAGE_MAP[userStageData.current_stage] || userStageData.current_stage;
 
         // Custom Budget Branching Logic (Before any bypasses)
         if (userStageData.current_stage === "BUDGET") {
@@ -305,43 +297,30 @@ export async function generateAutoResponse(
         let response = "";
         let bypassedLLM = false;
 
-        const isTerminalStage = capturedStages.includes(nextStage);
-        const wasTerminalStage = capturedStages.includes(userStageData.current_stage);
-        
-        // FORCE BYPASS for all standard script stages (1-11), or when first entering a terminal stage
-        const forceScriptBypass = !isTerminalStage || (isTerminalStage && !wasTerminalStage);
-
         if (nextStage === "PROMPT_CONTINUE") {
             response = `"Welcome back! Would you like to continue our previous conversation, or should we start fresh?"\n[STAGE: ${userStageData.current_stage}]`;
             bypassedLLM = true;
             console.log("⚡ Bypassing LLM for PROMPT_CONTINUE greeting");
-        } else if (forceScriptBypass) {
+        } else if (!isCaptured || (capturedStages.includes(nextStage) && !capturedStages.includes(userStageData.current_stage))) {
             // Bypass the LLM for ALL standard script stages, including terminal destinations (first entry only)!
-            console.log(`⚡ Attempting manual script extraction for stage: ${nextStage}`);
             const lines = MASTER_SYSTEM_PROMPT.split('\n');
             let isCapturingBlock = false;
             let capturedLines = [];
             
             for (const line of lines) {
-                const trimmed = line.trim();
-                // Match header like "DISCOVERY (Stage 1):" or "SELL (Stage 2):"
-                if (trimmed.startsWith(nextStage) && trimmed.includes("(Stage")) {
+                if (line.trim().startsWith(`${nextStage} (Stage`)) {
                     isCapturingBlock = true;
-                    continue; 
+                    continue; // Skip the header line
                 }
-                
                 if (isCapturingBlock) {
-                    if (trimmed.startsWith("[STAGE:") && trimmed.includes(nextStage)) {
+                    capturedLines.push(line);
+                    if (line.includes(`[STAGE: ${nextStage}]`)) {
                         response = capturedLines.join('\n').trim();
                         bypassedLLM = true;
-                        console.log(`✅ Success! Manual script bypass for ${nextStage}`);
+                        console.log(`⚡ Bypassing LLM! Extracted exact text for stage: ${nextStage}`);
                         break;
                     }
-                    capturedLines.push(line);
                 }
-            }
-            if (!bypassedLLM) {
-                console.warn(`❌ Failed to manually extract script for stage: ${nextStage}. Falling back to LLM.`);
             }
         }
 
