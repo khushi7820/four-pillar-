@@ -96,10 +96,10 @@ Interested?
 • B. Not now
 
 === RULES ===
-1. NO BOLD (*). NO STARS.
-2. NO CHATTY INTROS.
-3. BE EXTREMELY BRIEF.
-3. BE EXTREMELY BRIEF.
+1. KNOWLEDGE: Answer specific questions briefly using context.
+2. SCRIPT: Output the EXACT script block for the stage.
+3. NO CHATBOT FLUFF: No intros or summaries.
+4. MAX 2 BUBBLES: Split into 2 bubbles max matching WhatsApp patterns.
 `;
 
 export type UserStageData = {

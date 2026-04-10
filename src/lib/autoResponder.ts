@@ -126,43 +126,69 @@ export async function generateAutoResponse(
 
         console.log(`Pre-processing took ${Date.now() - startTime}ms (Gap: ${timeGapDays.toFixed(1)} days)`);
 
-        // 7. Build the system prompt using the database prompt if available, 
-        // fallback to the master persona ONLY if empty.
-        let systemPrompt: string = phoneMapping.system_prompt || MASTER_SYSTEM_PROMPT;
+        // 7. Build the system prompt using the master persona ONLY
+        // We IGNORE custom prompts to ensure the script mirror is perfect
+        let systemPrompt: string = MASTER_SYSTEM_PROMPT;
 
-
-        // 7.5 Parse Flow Transitions from the system prompt (Sync from Sheet)
-        const STAGE_TRANSITIONS: Record<string, string> = {};
-        const flowMatches = systemPrompt.match(/\[FLOW:\s*(.*?)\]/);
-        if (flowMatches) {
-            const flowPairs = flowMatches[1].split(",").map(p => p.trim());
-            for (const pair of flowPairs) {
-                const [curr, next] = pair.split("->").map(s => s.trim());
-                if (curr && next) STAGE_TRANSITIONS[curr.toUpperCase()] = next.toUpperCase();
-            }
-        }
+        const STAGE_MAP: Record<string, string> = {
+            "DISCOVERY": "SELL",
+            "SELL": "CUSTOMER",
+            "CUSTOMER": "BRANDING",
+            "BRANDING": "MARKETING",
+            "MARKETING": "GOAL",
+            "GOAL": "BUDGET",
+            "BUDGET": "HOT_LEAD",
+            "NURTURE_CONTENT": "NURTURE_DIGITAL",
+            "NURTURE_DIGITAL": "DISCOVERY_SESSIONS",
+            "DISCOVERY_SESSIONS": "HOT_LEAD",
+            "PROMPT_CONTINUE": "DISCOVERY" // Fallback if they say anything
+        };
 
         const isGreeting = /^(hey|hi|hello|menu|hy|hyy|hii|hiii|heyy|heyyy|namaste|kem cho|kese ho|kaise ho)$/i.test(messageText.trim());
-        const currentStage = (userStageData.current_stage || "DISCOVERY").toUpperCase();
-        
-        let targetStage = STAGE_TRANSITIONS[currentStage] || currentStage;
+        const isStartFresh = /^(start fresh|fresh one|fresh|new topic|new|restart|start new|start over|start again)$/i.test(messageText.trim());
+        const isContinue = /^(continue|same|old|yes|y)$/i.test(messageText.trim());
 
-        // If it's a greeting and we haven't sent the first message, always start at DISCOVERY
-        if (isGreeting && !userStageData.first_message_sent) {
-            targetStage = "DISCOVERY";
+        let nextStage = STAGE_MAP[userStageData.current_stage] || userStageData.current_stage;
+
+        if (isGreeting) {
+            if (!userStageData.first_message_sent) {
+                // First time ever saying hello
+                nextStage = "DISCOVERY";
+            } else {
+                // Returning user saying hello, ALWAYS ask to continue
+                nextStage = "PROMPT_CONTINUE";
+            }
+        } else if (isStartFresh) {
+            nextStage = "DISCOVERY";
+        } else if (isContinue) {
+            // Re-send the current stage question that they left off at so they can answer it!
+            nextStage = userStageData.current_stage;
         }
 
         // Add current state (for AI's internal knowledge ONLY)
         systemPrompt += `\n\n=== CONTEXT ===\n`;
         systemPrompt += `- Detected Language: ${detectedLanguage}\n`;
-        systemPrompt += `- Current Stage: ${currentStage}\n`;
-        systemPrompt += `- Target Stage: ${targetStage}\n`;
+        systemPrompt += `- Current Stage: ${userStageData.current_stage}\n`;
+        systemPrompt += `- Next Expected Stage: ${nextStage}\n`;
+
+        if (!userStageData.first_message_sent) {
+            systemPrompt += `\n\n=== TASK ===\n`;
+            systemPrompt += `This is your first message. You MUST output EXACTLY the "DISCOVERY" stage text.\n`;
+        }
 
         // STRICT SCRIPT ENFORCEMENT
         systemPrompt += `\n\n=== STRICT RULES ===\n`;
         systemPrompt += `1. NO CHATBOT BEHAVIOR: Do not be chatty. Do not summarize. Do not acknowledge their answer.\n`;
-        systemPrompt += `2. COPY PASTE ONLY: Your ONLY job is to output the EXACT text for the Target Stage (${targetStage}) from the SCRIPT BLOCKS above.\n`;
-        systemPrompt += `3. ALWAYS include the tag [STAGE: ${targetStage}] at the end of your message so we keep their place saved.\n`;
+        systemPrompt += `2. COPY PASTE ONLY: Your ONLY job is to output the EXACT text for the Next Expected Stage (${nextStage}) from the SCRIPT BLOCKS above.\n`;
+        
+        if (nextStage === "PROMPT_CONTINUE") {
+            systemPrompt += `3. SPECIAL TASK: The user said hello. You MUST ONLY output this exact question: "Would you like to continue our previous conversation, or should we start fresh with this new inquiry?"\n`;
+            systemPrompt += `4. ALWAYS include the tag [STAGE: ${userStageData.current_stage}] at the end so we keep their old place saved.\n`;
+        } else {
+            systemPrompt += `3. DO NOT MAKE UP PLANS: Never invent pricing, plans, or services. Just output the script block.\n`;
+            systemPrompt += `4. SCRIPT PROGRESSION: Always include the tag [STAGE: ${nextStage}] at the end of your message so the database updates.\n`;
+            systemPrompt += `5. If the next stage is HOT_LEAD, just output the HOT_LEAD text and stop.\n`;
+        }
 
         // 8. Add document context to system prompt (if any)
         if (contextText) {
@@ -181,7 +207,7 @@ export async function generateAutoResponse(
             }
         ];
 
-        console.log(`Sending to LLM. Target Stage: ${targetStage}`);
+        console.log(`Sending to LLM with ${messages.length} total messages. Target Stage: ${nextStage}`);
 
         // 10. Generate response with Priority Swap (Gemini Primary -> Groq Fallback)
         let response = "";
@@ -195,7 +221,7 @@ export async function generateAutoResponse(
             if (!geminiKey) throw new Error("Gemini API key not configured");
             console.log("Attempting Gemini 1.5 Flash (Primary)...");
             const localGenAI = new GoogleGenerativeAI(geminiKey);
-            const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash" }, { apiVersion: "v1" });
+            const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
             // Format messages for Gemini
             const geminiMessages = messages.map(m => ({
@@ -225,27 +251,61 @@ export async function generateAutoResponse(
         }
 
         try {
-            // Priority 1: Groq 70B (Primary as requested)
-            attemptStartTime = Date.now();
+            // Priority 1: Groq 70B (Reliable & Intelligent for Strict Instructions)
             response = await tryGroq("llama-3.3-70b-versatile");
             console.log(`Groq 70B success (Primary) in ${Date.now() - attemptStartTime}ms`);
-        } catch (groqError: any) {
-            console.warn("Groq 70B failed, trying Gemini...", groqError.message);
+        } catch (groq70Error: any) {
+            console.warn("Groq 70B failed, trying Groq 8B...", groq70Error.message);
             try {
-                // Priority 2: Gemini 1.5 Flash (Fallback)
+                // Priority 2: Groq 8B (Fallback)
                 attemptStartTime = Date.now();
-                response = await tryGemini();
-                console.log(`Gemini success (Fallback) in ${Date.now() - attemptStartTime}ms`);
-            } catch (geminiError: any) {
-                console.error("All AI models failed!");
-                return { success: false, error: "AI service unavailable" };
+                response = await tryGroq("llama-3.1-8b-instant");
+                console.log(`Groq 8B success (Fallback) in ${Date.now() - attemptStartTime}ms`);
+            } catch (groq8Error: any) {
+                console.error("Groq 8B also failed, trying Gemini...", groq8Error.message);
+                try {
+                    // Priority 3: Gemini 1.5 Flash (Final Fallback)
+                    attemptStartTime = Date.now();
+                    const localGenAI = new GoogleGenerativeAI(geminiKey || "");
+                    const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+                    const geminiMessages = messages.map(m => ({
+                        role: m.role === "system" ? "user" : (m.role === "user" ? "user" : "model"),
+                        parts: [{ text: m.content }]
+                    }));
+
+                    const result = await model.generateContent({
+                        contents: geminiMessages.slice(1),
+                        systemInstruction: messages[0].content,
+                    });
+                    response = result.response.text();
+                    console.log(`Gemini success in ${Date.now() - attemptStartTime}ms`);
+                } catch (geminiError: any) {
+                    console.error("All AI models failed!");
+                    return { success: false, error: "AI service unavailable" };
+                }
             }
         }
 
         // 11. FORCE PROGRESSION (Ignore AI hallucinations, follow the map)
         const stageUpdateMatch = response.match(/\[STAGE:\s*(.*?)\]/i);
-        // If AI gives a tag, use it. Otherwise, use targetStage we calculated
-        let newStage = stageUpdateMatch ? stageUpdateMatch[1].trim().toUpperCase() : targetStage;
+        // If AI gives a tag, use it. Otherwise, use nextStage (which we calculated earlier)
+        let newStage = stageUpdateMatch ? stageUpdateMatch[1].trim() : nextStage;
+
+        // Ensure we don't accidentally save 'PROMPT_CONTINUE' as a DB state (we keep their old state instead)
+        if (newStage === "PROMPT_CONTINUE") {
+            newStage = userStageData.current_stage;
+        }
+
+        // Handle Budget Branching Manually for Safety
+        if (userStageData.current_stage === "BUDGET") {
+            const lowerRes = response.toLowerCase();
+            if (lowerRes.includes("strat") || lowerRes.includes("blueprint") || lowerRes.includes("exactly the kind")) {
+                newStage = "HOT_LEAD";
+            } else {
+                newStage = "NURTURE_CONTENT";
+            }
+        }
 
         const infoMatches = Array.from(response.matchAll(/\[INFO:\s*(.*?)=(.*?)\]/gi));
         let newInfo: Record<string, any> = {};
@@ -262,8 +322,18 @@ export async function generateAutoResponse(
         // Update database stage/info
         await updateUserConversationStage(fromNumber, toNumber, newStage, newInfo, true);
 
-        // 12. NO SPLITTING (As requested by user)
-        let messageChunks = [response];
+        // 12. SMART SPLITTING (MAX 2 BUBBLES)
+        let messageChunks = response
+            .split(/\n\n+/)
+            .map(chunk => chunk.trim())
+            .filter(chunk => chunk.length > 0);
+
+        // Force exactly 2 bubbles if more are generated
+        if (messageChunks.length > 2) {
+            const first = messageChunks[0];
+            const rest = messageChunks.slice(1).join("\n\n");
+            messageChunks = [first, rest];
+        }
 
         console.log(`Sending response in ${messageChunks.length} bubble(s) (Capped at 2)`);
 
