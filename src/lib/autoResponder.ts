@@ -6,14 +6,6 @@ import { sendWhatsAppMessage } from "./whatsappSender";
 import Groq from "groq-sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { MASTER_SYSTEM_PROMPT, getUserConversationStage, updateUserConversationStage } from "./persona";
-import fs from "fs";
-import path from "path";
-
-function logToFile(message: string) {
-    const logPath = path.resolve(process.cwd(), "debug_flow.log");
-    const timestamp = new Date().toISOString();
-    fs.appendFileSync(logPath, `[${timestamp}] ${message}\n`);
-}
 
 function normalizePhone(phone: string): string {
     return phone.replace(/\D/g, ""); // Remove everything except digits
@@ -90,7 +82,7 @@ export async function generateAutoResponse(
         }
 
         console.log(`📍 User Stage Data:`, userStageData);
-        logToFile(`INPUT: ${messageText} | FROM: ${fromNumber} | CURRENT_STAGE: ${userStageData.current_stage}`);
+        console.log(`INPUT: ${messageText} | FROM: ${fromNumber} | CURRENT_STAGE: ${userStageData.current_stage}`);
 
 
         const customSystemPrompt = phoneMapping.system_prompt;
@@ -143,9 +135,13 @@ export async function generateAutoResponse(
 
         console.log(`Pre-processing took ${Date.now() - startTime}ms (Gap: ${timeGapDays.toFixed(1)} days)`);
 
-        // 7. Build the system prompt using the master persona ONLY
-        // We IGNORE custom prompts to ensure the script mirror is perfect
+        // 7. Build the system prompt using the master persona and BUSINESS SPECIFIC prompt
         let systemPrompt: string = MASTER_SYSTEM_PROMPT;
+        
+        if (customSystemPrompt) {
+            systemPrompt += `\n\n=== BUSINESS PROFILE & CUSTOM RULES ===\n${customSystemPrompt}\n`;
+            systemPrompt += `CRITICAL: If the Business Profile above contradicts the generic script, ALWAYS FOLLOW THE BUSINESS PROFILE.\n`;
+        }
 
         const STAGE_MAP: Record<string, string> = {
             "DISCOVERY": "SELL",
@@ -158,7 +154,7 @@ export async function generateAutoResponse(
             "NURTURE_CONTENT": "NURTURE_DIGITAL",
             "NURTURE_DIGITAL": "DISCOVERY_SESSIONS",
             "DISCOVERY_SESSIONS": "HOT_LEAD",
-            "PROMPT_CONTINUE": "DISCOVERY" // Fallback if they say anything
+            "PROMPT_CONTINUE": "DISCOVERY" 
         };
 
         const isGreeting = /^(hey|hi|hello|menu|hy|hyy|hii|hiii|heyy|heyyy|namaste|kem cho|kese ho|kaise ho)$/i.test(messageText.trim());
@@ -183,7 +179,6 @@ export async function generateAutoResponse(
         }
 
         console.log(`➡️ Calculated Next Stage: ${nextStage} (Current: ${userStageData.current_stage})`);
-        logToFile(`NEXT_STAGE_CALC: ${nextStage}`);
 
         // Add current state (for AI's internal knowledge ONLY)
         systemPrompt += `\n\n=== CONTEXT ===\n`;
@@ -340,11 +335,9 @@ export async function generateAutoResponse(
             .trim();
 
         console.log(`💾 Updating DB: fromNumber=${normFrom}, newStage=${newStage}`);
-        logToFile(`DB_UPDATE_START: newStage=${newStage}`);
         // Update database stage/info
         await updateUserConversationStage(normFrom, normTo, newStage, newInfo, true);
         console.log(`✅ DB Update attempted`);
-        logToFile(`DB_UPDATE_SUCCESS`);
 
         // 12. SMART SPLITTING (MAX 2 BUBBLES)
         let messageChunks = response
