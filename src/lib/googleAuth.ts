@@ -24,7 +24,15 @@ export function createGoogleJwt(scopes: string[] = []) {
     finalKey = finalKey.replace(/^["']|["']$/g, '');
 
     // 3. Handle escaped newlines (standard fix for Vercel / .env)
-    finalKey = finalKey.replace(/\\n/g, "\n");
+    finalKey = finalKey.replace(/\\n/g, "\n").replace(/\r\n/g, "\n");
+
+    // 4. Robust OpenSSL Re-chunker (Fixes ERR_OSSL_UNSUPPORTED where base64 is flattened)
+    const keyMatch = finalKey.match(/(-----BEGIN PRIVATE KEY-----)([\s\S]*?)(-----END PRIVATE KEY-----)/);
+    if (keyMatch) {
+      const bodyClean = keyMatch[2].replace(/\s+/g, ""); // Strip ALL whitespace
+      const bodyChunked = bodyClean.match(/.{1,64}/g)?.join("\n") || bodyClean;
+      finalKey = `-----BEGIN PRIVATE KEY-----\n${bodyChunked}\n-----END PRIVATE KEY-----\n`;
+    }
 
     if (!finalKey.includes("-----BEGIN")) {
       console.error("CRITICAL AUTH ERROR: Your GOOGLE_PRIVATE_KEY in .env.local is completely malformed. It MUST contain '-----BEGIN PRIVATE KEY-----'. You likely pasted the wrong value, truncated it, or missed the headers.");
