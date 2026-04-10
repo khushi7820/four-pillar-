@@ -271,8 +271,8 @@ export async function generateAutoResponse(
         const stageUpdateMatch = response.match(/\[STAGE:\s*(.*?)\]/i);
         let newStage = stageUpdateMatch ? stageUpdateMatch[1].trim() : STAGE_MAP[userStageData.current_stage];
 
-        // FORCE RESET on Greeting
-        const isGreeting = /^(hey|hi|hello|restart|menu)$/i.test(messageText.trim());
+        // FORCE RESET on Greeting or "Start Fresh"
+        const isGreeting = /^(hey|hi|hello|restart|menu|start fresh|fresh one|fresh|new topic|new)$/i.test(messageText.trim());
         if (isGreeting) {
             newStage = "DISCOVERY";
         }
