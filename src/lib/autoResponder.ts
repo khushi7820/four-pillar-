@@ -185,34 +185,32 @@ export async function generateAutoResponse(
         // Add current state (for AI's internal knowledge ONLY)
         systemPrompt += `\n\n=== CONTEXT ===\n`;
         systemPrompt += `- Detected Language: ${detectedLanguage}\n`;
+        // 8. Build the final prompt with Rules at the VERY END for maximum influence
+        systemPrompt += `\n\n=== ADDITIONAL INFO (For specific questions only) ===\n${contextText || "No additional info."}\n`;
+
+        systemPrompt += `\n\n=== FINAL DATA FOR THIS RESPONSE ===\n`;
+        systemPrompt += `- Your Identity: Expert Sales Assistant\n`;
+        systemPrompt += `- User Language: ${userLanguage}\n`;
         systemPrompt += `- Current Stage: ${userStageData.current_stage}\n`;
-        systemPrompt += `- Next Expected Stage: ${nextStage}\n`;
+        systemPrompt += `- Target Stage: ${nextStage}\n`;
 
         if (nextStage === "HOT_LEAD" || userStageData.current_stage === "HOT_LEAD") {
-            systemPrompt += `\n\n=== TASK ===\n`;
+            systemPrompt += `\n\n=== CRITICAL INSTRUCTIONS ===\n`;
             systemPrompt += `The lead has been captured. Do NOT use the script anymore. Move into "Assistant Mode".\n`;
-            systemPrompt += `1. Be helpful, warm, and natural. No more stage tags unless the user wants to start over.\n`;
-            systemPrompt += `2. Answer any follow-up questions using ONLY the BUSINESS PROFILE and ADDITIONAL INFO provided.\n`;
-            systemPrompt += `3. If the user says thanks/ok, just wish them a great day and say the team will call them.\n`;
+            systemPrompt += `1. Be helpful, warm, and natural. No more stage tags.\n`;
+            systemPrompt += `2. Answer follow-up questions using ONLY the SCRIPT or BUSINESS PROFILE.\n`;
+            systemPrompt += `3. If the user says thanks/ok, wish them a great day and say the team will call.\n`;
         } else {
-            if (!userStageData.first_message_sent) {
-                systemPrompt += `\n\n=== TASK ===\n`;
-                systemPrompt += `This is your first message. You MUST output EXACTLY the "DISCOVERY" stage text.\n`;
-            }
-
-            // STRICT SCRIPT ENFORCEMENT
-            systemPrompt += `\n\n=== STRICT RULES ===\n`;
-            systemPrompt += `1. NO CHATBOT BEHAVIOR: Do not be chatty. Do not summarize. Do not acknowledge their answer.\n`;
-            systemPrompt += `2. COPY PASTE ONLY: Your ONLY job is to output the EXACT text for the Next Expected Stage (${nextStage}) from the SCRIPT BLOCKS above.\n`;
+            systemPrompt += `\n\n=== CRITICAL INSTRUCTIONS (MANDATORY) ===\n`;
+            systemPrompt += `1. COPY PASTE ONLY: Your ONLY job is to output the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section above.\n`;
+            systemPrompt += `2. NO CHATBOT FLUFF: Do NOT acknowledge their answer. Do NOT say "Got it" or "Understood". Start your message immediately with the script text.\n`;
+            systemPrompt += `3. STAGE TAG: You MUST end your message with this exact tag: [STAGE: ${nextStage}]\n`;
+            systemPrompt += `4. PRICE LOCK: NEVER mention any pricing, numbers, or packages unless they are written EXACTLY in the script block for (${nextStage}).\n`;
+            systemPrompt += `5. SUPPORT: If the user asks a specific question (e.g. "where are you located?"), answer it in 1 short sentence using the SCRIPT/INFO, then IMMEDIATELY follow it with the script for (${nextStage}).\n`;
         }
-        
+
         if (nextStage === "PROMPT_CONTINUE") {
-            systemPrompt += `3. SPECIAL TASK: The user said hello. You MUST ONLY output this exact question: "Would you like to continue our previous conversation, or should we start fresh with this new inquiry?"\n`;
-            systemPrompt += `4. ALWAYS include the tag [STAGE: ${userStageData.current_stage}] at the end so we keep their old place saved.\n`;
-        } else if (nextStage !== "HOT_LEAD" && userStageData.current_stage !== "HOT_LEAD") {
-            systemPrompt += `3. DO NOT MAKE UP PLANS: Never invent pricing, plans, or services. Just output the script block.\n`;
-            systemPrompt += `4. SCRIPT PROGRESSION: Always include the tag [STAGE: ${nextStage}] at the end of your message so the database updates.\n`;
-            systemPrompt += `5. If the next stage is HOT_LEAD, just output the HOT_LEAD text and stop.\n`;
+            systemPrompt += `SPECIAL TASK: The user said hello. Offer to continue the conversation: "Would you like to continue our previous conversation, or should we start fresh?" [STAGE: ${userStageData.current_stage}]\n`;
         }
 
         // 8. Add document context to system prompt (if any)
