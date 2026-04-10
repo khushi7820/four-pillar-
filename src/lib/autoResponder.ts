@@ -170,7 +170,7 @@ export async function generateAutoResponse(
         };
 
         const isGreeting = /^(hey|hi|hello|menu|hy|hyy|hii|hiii|heyy|heyyy|namaste|kem cho|kese ho|kaise ho)$/i.test(messageText.trim());
-        const isStartFresh = /^(start fresh|fresh one|fresh|new topic|new|restart|start new|start over|start again)$/i.test(messageText.trim());
+        const isStartFresh = /^(start|start fresh|fresh one|fresh|new topic|new|restart|start new|start over|start again)$/i.test(messageText.trim());
         const isContinue = /^(continue|same|old|yes|y)$/i.test(messageText.trim());
 
         // 7.5 BLACKLIST BROKEN LINK
