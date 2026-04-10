@@ -5,7 +5,7 @@ import { getFilesForPhoneNumber } from "./phoneMapping";
 import { sendWhatsAppMessage } from "./whatsappSender";
 import Groq from "groq-sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { MASTER_SYSTEM_PROMPT, DEFAULT_SCRIPT, getUserConversationStage, updateUserConversationStage } from "./persona";
+import { MASTER_SYSTEM_PROMPT, getUserConversationStage, updateUserConversationStage } from "./persona";
 
 function normalizePhone(phone: string): string {
     return phone.replace(/\D/g, ""); // Remove everything except digits
@@ -138,11 +138,8 @@ export async function generateAutoResponse(
         // 7. Build the system prompt using the master instructions
         let systemPrompt: string = MASTER_SYSTEM_PROMPT;
         
-        systemPrompt += `\n\n=== SCRIPT ===\n`;
         if (customSystemPrompt) {
-            systemPrompt += `${customSystemPrompt}\n`;
-        } else {
-            systemPrompt += `${DEFAULT_SCRIPT}\n`;
+            systemPrompt += `\n\n=== BUSINESS PROFILE & CUSTOM SCRIPT ===\n${customSystemPrompt}\n`;
         }
 
         const STAGE_MAP: Record<string, string> = {
