@@ -74,7 +74,12 @@ Monthly marketing budget?
 
 HOT_LEAD (Stage 8):
 Perfect! 🎯 You're exactly the kind of brand we work with. 
-Our strategist will call you shortly with a custom plan. Talk soon!
+Our strategist will call you shortly with a custom plan.
+
+Here's our Company Blueprint in the meantime:
+🔗 https://drive.google.com/file/d/1d7eXp-ORve4_SlbpnQj3OOyWYMqpFaZ-/view?usp=sharing
+
+Talk soon!
 [STAGE: HOT_LEAD]
 
 NURTURE_CONTENT (Stage 9):

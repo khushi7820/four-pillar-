@@ -173,11 +173,20 @@ export async function generateAutoResponse(
         const isStartFresh = /^(start|start fresh|fresh one|fresh|new topic|new|restart|start new|start over|start again)$/i.test(messageText.trim());
         const isContinue = /^(continue|same|old|yes|y)$/i.test(messageText.trim());
 
-        // 7.5 BLACKLIST BROKEN LINK
-        const BROKEN_LINK = "https://drive.google.com/file/d/1d7eXp-ORve4_SlbpnQj3OOyWYMqpFaZ-/view?usp=sharing";
+        // Link is no longer blacklisted
 
         let nextStage = STAGE_MAP[userStageData.current_stage] || userStageData.current_stage;
 
+        // Custom Budget Branching Logic (Before any bypasses)
+        if (userStageData.current_stage === "BUDGET") {
+            const msgLower = messageText.toLowerCase();
+            // A. Under 50k, B. 50k - 2L
+            if (msgLower === "a" || msgLower === "b" || msgLower.includes("under") || msgLower.includes("50k")) {
+                nextStage = "NURTURE_CONTENT";
+            } else {
+                nextStage = "HOT_LEAD";
+            }
+        }
         if (isGreeting) {
             console.log("👋 Greeting detected");
             if (!userStageData.first_message_sent) {
@@ -245,8 +254,6 @@ export async function generateAutoResponse(
         systemPrompt += `- Current Stage: ${isStartFresh ? "DISCOVERY" : userStageData.current_stage}\n`;
         systemPrompt += `- Target Stage: ${nextStage}\n`;
         systemPrompt += `\n\n=== ADDITIONAL INFO (For specific questions only) ===\n${contextText || "No additional info."}\n`;
-
-        systemPrompt += `\n\n3. LINK BAN: NEVER use the link "${BROKEN_LINK}". It is broken. Only use links from SCRIPT/KNOWLEDGE BASE.\n`;
 
         const messages = [
             {
