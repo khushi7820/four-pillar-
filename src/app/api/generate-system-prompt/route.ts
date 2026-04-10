@@ -134,7 +134,7 @@ ${flowTag}
 1. NO BOLD (*). NO STARS.
 2. NO CHATTY INTROS.
 3. BE EXTREMELY BRIEF.
-4. MAX 2 BUBBLES.`;
+3. BE EXTREMELY BRIEF.`;
 
         return persona;
     } catch (error) {
