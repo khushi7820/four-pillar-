@@ -130,7 +130,6 @@ export async function generateAutoResponse(
         // We IGNORE custom prompts to ensure the script mirror is perfect
         let systemPrompt: string = MASTER_SYSTEM_PROMPT;
 
-        // Define stage progression map
         const STAGE_MAP: Record<string, string> = {
             "DISCOVERY": "SELL",
             "SELL": "CUSTOMER",
@@ -141,9 +140,24 @@ export async function generateAutoResponse(
             "BUDGET": "HOT_LEAD",
             "NURTURE_CONTENT": "NURTURE_DIGITAL",
             "NURTURE_DIGITAL": "DISCOVERY_SESSIONS",
-            "DISCOVERY_SESSIONS": "HOT_LEAD"
+            "DISCOVERY_SESSIONS": "HOT_LEAD",
+            "PROMPT_CONTINUE": "DISCOVERY" // Fallback if they say anything
         };
-        const nextStage = STAGE_MAP[userStageData.current_stage] || userStageData.current_stage;
+
+        const isGreeting = /^(hey|hi|hello|restart|menu)$/i.test(messageText.trim());
+        const isStartFresh = /^(start fresh|fresh one|fresh|new topic|new)$/i.test(messageText.trim());
+        const isContinue = /^(continue|same|old|yes|y)$/i.test(messageText.trim());
+
+        let nextStage = STAGE_MAP[userStageData.current_stage] || userStageData.current_stage;
+
+        if (isGreeting && userStageData.current_stage !== "DISCOVERY") {
+            nextStage = "PROMPT_CONTINUE";
+        } else if (isStartFresh) {
+            nextStage = "DISCOVERY";
+        } else if (isContinue) {
+            // Re-send the current stage question that they left off at so they can answer it!
+            nextStage = userStageData.current_stage;
+        }
 
         // Add current state (for AI's internal knowledge ONLY)
         systemPrompt += `\n\n=== CONTEXT ===\n`;
@@ -154,21 +168,21 @@ export async function generateAutoResponse(
         if (!userStageData.first_message_sent) {
             systemPrompt += `\n\n=== TASK ===\n`;
             systemPrompt += `This is your first message. You MUST output EXACTLY the "DISCOVERY" stage text.\n`;
-        } else if (isReturningUser) {
-            systemPrompt += `\n\n=== RE-ENGAGEMENT TASK ===\n`;
-            systemPrompt += `The user has returned after ${timeGapDays.toFixed(0)} days. \n`;
-            systemPrompt += `If they are asking a DIFFERENT question or about a different service than before, you MUST ask: \n`;
-            systemPrompt += `"Would you like to continue our previous conversation, or should we start fresh with this new inquiry?"\n`;
-            systemPrompt += `If they reply they want to "START FRESH" or "FRESH ONE", you MUST include the literal text "[STAGE: DISCOVERY]" to reset the database and output the DISCOVERY script.\n`;
         }
 
         // STRICT SCRIPT ENFORCEMENT
         systemPrompt += `\n\n=== STRICT RULES ===\n`;
         systemPrompt += `1. NO CHATBOT BEHAVIOR: Do not be chatty. Do not summarize. Do not acknowledge their answer.\n`;
         systemPrompt += `2. COPY PASTE ONLY: Your ONLY job is to output the EXACT text for the Next Expected Stage (${nextStage}) from the SCRIPT BLOCKS above.\n`;
-        systemPrompt += `3. DO NOT MAKE UP PLANS: Never invent pricing, plans, or services. Just output the script block.\n`;
-        systemPrompt += `4. SCRIPT PROGRESSION: Always include the tag [STAGE: ${nextStage}] at the end of your message so the database updates.\n`;
-        systemPrompt += `5. If the next stage is HOT_LEAD, just output the HOT_LEAD text and stop.\n`;
+        
+        if (nextStage === "PROMPT_CONTINUE") {
+            systemPrompt += `3. SPECIAL TASK: The user said hello. You MUST ONLY output this exact question: "Would you like to continue our previous conversation, or should we start fresh with this new inquiry?"\n`;
+            systemPrompt += `4. ALWAYS include the tag [STAGE: ${userStageData.current_stage}] at the end so we keep their old place saved.\n`;
+        } else {
+            systemPrompt += `3. DO NOT MAKE UP PLANS: Never invent pricing, plans, or services. Just output the script block.\n`;
+            systemPrompt += `4. SCRIPT PROGRESSION: Always include the tag [STAGE: ${nextStage}] at the end of your message so the database updates.\n`;
+            systemPrompt += `5. If the next stage is HOT_LEAD, just output the HOT_LEAD text and stop.\n`;
+        }
 
         // 8. Add document context to system prompt (if any)
         if (contextText) {
@@ -187,7 +201,7 @@ export async function generateAutoResponse(
             }
         ];
 
-        console.log(`Sending to LLM with ${messages.length} total messages`);
+        console.log(`Sending to LLM with ${messages.length} total messages. Target Stage: ${nextStage}`);
 
         // 10. Generate response with Priority Swap (Gemini Primary -> Groq Fallback)
         let response = "";
@@ -269,12 +283,12 @@ export async function generateAutoResponse(
 
         // 11. FORCE PROGRESSION (Ignore AI hallucinations, follow the map)
         const stageUpdateMatch = response.match(/\[STAGE:\s*(.*?)\]/i);
-        let newStage = stageUpdateMatch ? stageUpdateMatch[1].trim() : STAGE_MAP[userStageData.current_stage];
+        // If AI gives a tag, use it. Otherwise, use nextStage (which we calculated earlier)
+        let newStage = stageUpdateMatch ? stageUpdateMatch[1].trim() : nextStage;
 
-        // FORCE RESET on Greeting or "Start Fresh"
-        const isGreeting = /^(hey|hi|hello|restart|menu|start fresh|fresh one|fresh|new topic|new)$/i.test(messageText.trim());
-        if (isGreeting) {
-            newStage = "DISCOVERY";
+        // Ensure we don't accidentally save 'PROMPT_CONTINUE' as a DB state (we keep their old state instead)
+        if (newStage === "PROMPT_CONTINUE") {
+            newStage = userStageData.current_stage;
         }
 
         // Handle Budget Branching Manually for Safety
