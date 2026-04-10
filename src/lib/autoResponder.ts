@@ -212,10 +212,14 @@ export async function generateAutoResponse(
 
         const isCaptured = nextStage === "HOT_LEAD" || userStageData.current_stage === "HOT_LEAD";
         if (isCaptured) {
-            systemPrompt += `\n\n=== ASSISTANT MODE (LEAD CAPTURED) ===\n`;
-            systemPrompt += `The lead has been captured. Do NOT use the script anymore. Move into "Assistant Mode".\n`;
-            systemPrompt += `1. Answer concisely using ONLY 4-5 bullet points or lines.\n`;
-            systemPrompt += `2. NO CHATBOT FLUFF: No long intros. Start with the answer.\n`;
+            systemPrompt += `
+\n\n=== CRITICAL FINAL COMMAND (ASSISTANT MODE) ===
+1. ACT AS AN ASSISTANT. The lead is captured. DO NOT use the sales script anymore.
+2. DO NOT output the HOT_LEAD script again.
+3. Answer the user's question concisely using the "BUSINESS PROFILE & CUSTOM SCRIPT" provided above.
+4. Keep answers to 4-5 bullet points or lines maximum.
+5. NO CHATBOT FLUFF: Start immediately with the answer. Do not say "Sure!" or "Here is...".
+`;
         } else {
              systemPrompt += `
 \n\n=== CRITICAL FINAL COMMAND (MANDATORY) ===
