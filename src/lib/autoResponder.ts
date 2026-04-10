@@ -6,6 +6,18 @@ import { sendWhatsAppMessage } from "./whatsappSender";
 import Groq from "groq-sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { MASTER_SYSTEM_PROMPT, getUserConversationStage, updateUserConversationStage } from "./persona";
+import fs from "fs";
+import path from "path";
+
+function logToFile(message: string) {
+    const logPath = path.resolve(process.cwd(), "debug_flow.log");
+    const timestamp = new Date().toISOString();
+    fs.appendFileSync(logPath, `[${timestamp}] ${message}\n`);
+}
+
+function normalizePhone(phone: string): string {
+    return phone.replace(/\D/g, ""); // Remove everything except digits
+}
 
 const groq = new Groq({
     apiKey: process.env.GROQ_API_KEY!,
@@ -32,8 +44,10 @@ export async function generateAutoResponse(
     messageId: string,
     senderName?: string
 ): Promise<AutoResponseResult> {
+    const normFrom = normalizePhone(fromNumber);
+    const normTo = normalizePhone(toNumber);
     try {
-        console.log(`--- Starting Fast Auto-Response for ${toNumber} ---`);
+        console.log(`--- Starting Fast Auto-Response for ${normTo} (From: ${normFrom}) ---`);
         const startTime = Date.now();
 
         // 1. Fetch mapping first (needed for custom API keys)
@@ -59,21 +73,24 @@ export async function generateAutoResponse(
             supabase
                 .from("whatsapp_messages")
                 .select("content_text, event_type, from_number, to_number, received_at")
-                .or(`and(from_number.eq.${fromNumber},to_number.eq.${toNumber}),and(from_number.eq.${toNumber},to_number.eq.${fromNumber})`)
+                .or(`and(from_number.eq.${normFrom},to_number.eq.${normTo}),and(from_number.eq.${normTo},to_number.eq.${normFrom})`)
                 .gte("received_at", new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString())
                 .order("received_at", { ascending: true })
                 .limit(40),
-            getUserConversationStage(fromNumber, toNumber)
+            getUserConversationStage(normFrom, normTo)
         ]);
 
         if (fileIds.length === 0) {
-            console.log(`No documents mapped for business number: ${toNumber}`);
+            console.log(`❌ No documents mapped for business number: ${toNumber}`);
             return {
                 success: false,
                 noDocuments: true,
                 error: "No documents mapped to this business number",
             };
         }
+
+        console.log(`📍 User Stage Data:`, userStageData);
+        logToFile(`INPUT: ${messageText} | FROM: ${fromNumber} | CURRENT_STAGE: ${userStageData.current_stage}`);
 
 
         const customSystemPrompt = phoneMapping.system_prompt;
@@ -151,19 +168,22 @@ export async function generateAutoResponse(
         let nextStage = STAGE_MAP[userStageData.current_stage] || userStageData.current_stage;
 
         if (isGreeting) {
+            console.log("👋 Greeting detected");
             if (!userStageData.first_message_sent) {
-                // First time ever saying hello
                 nextStage = "DISCOVERY";
             } else {
-                // Returning user saying hello, ALWAYS ask to continue
                 nextStage = "PROMPT_CONTINUE";
             }
         } else if (isStartFresh) {
+            console.log("🆕 Start fresh detected");
             nextStage = "DISCOVERY";
         } else if (isContinue) {
-            // Re-send the current stage question that they left off at so they can answer it!
+            console.log("🔄 Continue detected");
             nextStage = userStageData.current_stage;
         }
+
+        console.log(`➡️ Calculated Next Stage: ${nextStage} (Current: ${userStageData.current_stage})`);
+        logToFile(`NEXT_STAGE_CALC: ${nextStage}`);
 
         // Add current state (for AI's internal knowledge ONLY)
         systemPrompt += `\n\n=== CONTEXT ===\n`;
@@ -319,8 +339,12 @@ export async function generateAutoResponse(
             .replace(/\[INFO:\s*.*?=.*?\]/gi, "")
             .trim();
 
+        console.log(`💾 Updating DB: fromNumber=${normFrom}, newStage=${newStage}`);
+        logToFile(`DB_UPDATE_START: newStage=${newStage}`);
         // Update database stage/info
-        await updateUserConversationStage(fromNumber, toNumber, newStage, newInfo, true);
+        await updateUserConversationStage(normFrom, normTo, newStage, newInfo, true);
+        console.log(`✅ DB Update attempted`);
+        logToFile(`DB_UPDATE_SUCCESS`);
 
         // 12. SMART SPLITTING (MAX 2 BUBBLES)
         let messageChunks = response

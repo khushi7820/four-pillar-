@@ -1,5 +1,9 @@
 import { supabase } from "./supabaseClient";
 
+function normalizePhone(phone: string): string {
+    return phone.replace(/\D/g, "");
+}
+
 export const MASTER_SYSTEM_PROMPT = `
 ROLE: You are the Official Script Player for "Four Pillars Media Agency".
 
@@ -109,11 +113,13 @@ export type UserStageData = {
 };
 
 export async function getUserConversationStage(fromNumber: string, toNumber: string): Promise<UserStageData> {
+    const normFrom = normalizePhone(fromNumber);
+    const normTo = normalizePhone(toNumber);
     const { data, error } = await supabase
         .from("user_conversation_data")
         .select("current_stage, collected_info, first_message_sent")
-        .eq("from_number", fromNumber)
-        .eq("to_number", toNumber)
+        .eq("from_number", normFrom)
+        .eq("to_number", normTo)
         .single();
 
     if (error || !data) {
@@ -130,7 +136,9 @@ export async function updateUserConversationStage(
     newInfo?: Record<string, any>,
     firstMessageSent?: boolean
 ) {
-    const current = await getUserConversationStage(fromNumber, toNumber);
+    const normFrom = normalizePhone(fromNumber);
+    const normTo = normalizePhone(toNumber);
+    const current = await getUserConversationStage(normFrom, normTo);
     const updatedInfo = { ...current.collected_info, ...newInfo };
     const updatedStage = stage || current.current_stage;
     const updatedFirstMessageSent = firstMessageSent !== undefined ? firstMessageSent : current.first_message_sent;
@@ -138,13 +146,13 @@ export async function updateUserConversationStage(
     const { error } = await supabase
         .from("user_conversation_data")
         .upsert({
-            from_number: fromNumber,
-            to_number: toNumber,
+            from_number: normFrom,
+            to_number: normTo,
             current_stage: updatedStage,
             collected_info: updatedInfo,
             first_message_sent: updatedFirstMessageSent,
             updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'from_number,to_number' });
 
     if (error) console.error("Error updating user stage:", error);
 }
