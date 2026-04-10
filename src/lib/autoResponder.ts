@@ -218,7 +218,7 @@ export async function generateAutoResponse(
 2. ULTRA-CONCISE: Your entire response MUST NOT exceed 3 to 4 lines or bullet points. DO NOT print long paragraphs.
 3. NO PARAGRAPHS: Give answers strictly in short points. 
 4. NO MARKDOWN: NEVER use hashes (#) or stars/asterisks (*). Do not use bold/italic markdown.
-5. SPLIT BUBBLES: If the answer has multiple parts, use a double line break (\\n\\n) to separate them into 2 chat bubbles.
+5. SPLIT BUBBLES: ONLY IF the answer absolutely requires full long content, use a double line break (\\n\\n) to split it into 2 chat bubbles. Do NOT arbitrarily split short answers into bubbles.
 6. FORMAT: Use emojis 📌✨ to make it look premium.
 7. NO CHATBOT FLUFF: Start immediately with the answer.
 `;
