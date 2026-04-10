@@ -5,7 +5,7 @@ import { getFilesForPhoneNumber } from "./phoneMapping";
 import { sendWhatsAppMessage } from "./whatsappSender";
 import Groq from "groq-sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { MASTER_SYSTEM_PROMPT, getUserConversationStage, updateUserConversationStage } from "./persona";
+import { MASTER_SYSTEM_PROMPT, DEFAULT_SCRIPT, getUserConversationStage, updateUserConversationStage } from "./persona";
 
 function normalizePhone(phone: string): string {
     return phone.replace(/\D/g, ""); // Remove everything except digits
@@ -135,12 +135,14 @@ export async function generateAutoResponse(
 
         console.log(`Pre-processing took ${Date.now() - startTime}ms (Gap: ${timeGapDays.toFixed(1)} days)`);
 
-        // 7. Build the system prompt using the master persona and BUSINESS SPECIFIC prompt
+        // 7. Build the system prompt using the master instructions
         let systemPrompt: string = MASTER_SYSTEM_PROMPT;
         
+        systemPrompt += `\n\n=== SCRIPT ===\n`;
         if (customSystemPrompt) {
-            systemPrompt += `\n\n=== BUSINESS PROFILE & CUSTOM RULES ===\n${customSystemPrompt}\n`;
-            systemPrompt += `CRITICAL: If the Business Profile above contradicts the generic script, ALWAYS FOLLOW THE BUSINESS PROFILE.\n`;
+            systemPrompt += `${customSystemPrompt}\n`;
+        } else {
+            systemPrompt += `${DEFAULT_SCRIPT}\n`;
         }
 
         const STAGE_MAP: Record<string, string> = {
