@@ -190,7 +190,7 @@ export async function generateAutoResponse(
 
         systemPrompt += `\n\n=== FINAL DATA FOR THIS RESPONSE ===\n`;
         systemPrompt += `- Your Identity: Expert Sales Assistant\n`;
-        systemPrompt += `- User Language: ${userLanguage}\n`;
+        systemPrompt += `- User Language: ${detectedLanguage}\n`;
         systemPrompt += `- Current Stage: ${userStageData.current_stage}\n`;
         systemPrompt += `- Target Stage: ${nextStage}\n`;
 
@@ -213,11 +213,6 @@ export async function generateAutoResponse(
             systemPrompt += `SPECIAL TASK: The user said hello. Offer to continue the conversation: "Would you like to continue our previous conversation, or should we start fresh?" [STAGE: ${userStageData.current_stage}]\n`;
         }
 
-        // 8. Add document context to system prompt (if any)
-        if (contextText) {
-            systemPrompt += `\n\n=== ADDITIONAL INFO ===\n${contextText}\n`;
-        }
-
         const messages = [
             {
                 role: "system" as const,
@@ -232,7 +227,7 @@ export async function generateAutoResponse(
 
         console.log(`Sending to LLM with ${messages.length} total messages. Target Stage: ${nextStage}`);
 
-        // 10. Generate response with Priority Swap (Gemini Primary -> Groq Fallback)
+        // 10. Generate response with Priority Order (Groq 70B -> Groq 8B -> Gemini)
         let response = "";
         let attemptStartTime = Date.now();
 
@@ -240,29 +235,9 @@ export async function generateAutoResponse(
         const geminiKey = phoneMapping.gemini_api_key || process.env.GEMINI_API_KEY;
         const groqKey = phoneMapping.groq_api_key || process.env.GROQ_API_KEY;
 
-        async function tryGemini() {
-            if (!geminiKey) throw new Error("Gemini API key not configured");
-            console.log("Attempting Gemini 1.5 Flash (Primary)...");
-            const localGenAI = new GoogleGenerativeAI(geminiKey);
-            const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-            // Format messages for Gemini
-            const geminiMessages = messages.map(m => ({
-                role: m.role === "system" ? "user" : (m.role === "user" ? "user" : "model"),
-                parts: [{ text: m.content }]
-            }));
-
-            const result = await model.generateContent({
-                contents: geminiMessages.slice(1),
-                systemInstruction: messages[0].content,
-            });
-
-            return result.response.text();
-        }
-
-        async function tryGroq(model: string) {
+        async function tryGroq(model: "llama-3.3-70b-versatile" | "llama-3.1-8b-instant") {
             if (!groqKey) throw new Error("Groq API key not configured");
-            console.log(`Attempting Groq ${model} (Fallback)...`);
+            console.log(`Attempting Groq ${model}...`);
             const localGroq = new Groq({ apiKey: groqKey });
             const completion = await localGroq.chat.completions.create({
                 model: model,
