@@ -233,6 +233,13 @@ export async function generateAutoResponse(
         systemPrompt += MASTER_SYSTEM_PROMPT;
         systemPrompt += customContent;
 
+        // Add context & FAQ info EARLY so they are "above" the final commands
+        systemPrompt += `\n\n=== CONTEXT ===\n`;
+        systemPrompt += `- Detected Language: ${detectedLanguage}\n`;
+        systemPrompt += `- Current Stage: ${isStartFresh ? "DISCOVERY" : userStageData.current_stage}\n`;
+        systemPrompt += `- Target Stage: ${nextStage}\n`;
+        systemPrompt += `\n\n=== ADDITIONAL INFO (For specific questions only) ===\n${contextText || "No additional info."}\n`;
+
         if (nextStage === "PROMPT_CONTINUE") {
             systemPrompt += `\n\n=== SPECIAL TASK (GREETING) ===\n`;
             systemPrompt += `The user said hello, but you already have a history with them.\n`;
@@ -247,13 +254,12 @@ export async function generateAutoResponse(
         if (isCaptured) {
             systemPrompt += `
 \n\n=== CRITICAL FINAL COMMAND (ASSISTANT MODE) ===
-1. KNOWLEDGE MATCH: Use the 'BUSINESS PROFILE' & 'FAQ' from the custom sheet data above. Do not hallucinate outside info.
+1. KNOWLEDGE MATCH: Use the 'BUSINESS PROFILE' & 'FAQ' from 'ADDITIONAL INFO' and 'CUSTOM SCRIPT' sections provided above. Do not hallucinate outside info.
 2. ULTRA-CONCISE: Your entire response MUST NOT exceed 3 to 4 lines or bullet points. DO NOT print long paragraphs.
 3. NO PARAGRAPHS: Give answers strictly in short points. 
 4. NO MARKDOWN: NEVER use hashes (#) or stars/asterisks (*). Do not use bold/italic markdown.
 5. SPLIT BUBBLES: ONLY IF the answer absolutely requires full long content, use a double line break (\\n\\n) to split it into 2 chat bubbles. Do NOT arbitrarily split short answers into bubbles.
-6. FORMAT: Use emojis 📌✨ to make it look premium.
-7. NO CHATBOT FLUFF: Start immediately with the answer.
+6. FORMAT: Use emojis 📌✨ to make it look premium. Start immediately with the answer.
 `;
         } else {
              systemPrompt += `
@@ -271,13 +277,6 @@ export async function generateAutoResponse(
             systemPrompt += `1. User wants to START FRESH. Output ONLY the DISCOVERY script.\n`;
             systemPrompt += `2. IGNORE all previous data.\n`;
         }
-
-        // Add current state (for AI's internal knowledge ONLY)
-        systemPrompt += `\n\n=== CONTEXT ===\n`;
-        systemPrompt += `- Detected Language: ${detectedLanguage}\n`;
-        systemPrompt += `- Current Stage: ${isStartFresh ? "DISCOVERY" : userStageData.current_stage}\n`;
-        systemPrompt += `- Target Stage: ${nextStage}\n`;
-        systemPrompt += `\n\n=== ADDITIONAL INFO (For specific questions only) ===\n${contextText || "No additional info."}\n`;
 
         const messages = [
             {
