@@ -20,6 +20,9 @@ export function createGoogleJwt(scopes: string[] = []) {
       }
     }
 
+    // 2. Strip surrounding quotes (Next.js .env might not strip them)
+    finalKey = finalKey.replace(/^["']|["']$/g, '');
+
     // 3. Handle escaped newlines (standard fix for Vercel / .env)
     finalKey = finalKey.replace(/\\n/g, "\n");
 
