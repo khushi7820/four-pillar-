@@ -214,11 +214,13 @@ export async function generateAutoResponse(
         if (isCaptured) {
             systemPrompt += `
 \n\n=== CRITICAL FINAL COMMAND (ASSISTANT MODE) ===
-1. ACT AS AN EXPERT STRATEGIST. The lead is now asking questions. DO NOT output the HOT_LEAD script again.
-2. YOUR GOAL: Answer the exact question the user just asked.
-3. KNOWLEDGE MATCH: Use the 'BUSINESS PROFILE' & 'FAQ' from the custom sheet data above. Do not hallucinate outside info.
-4. FORMAT: You MUST format your answer point-wise with emojis 📌✨. Match the premium style of the sheet exactly.
-5. NO CHATBOT FLUFF: Never say "Sure, I can help" or "According to the sheet". Start directly with the answer.
+1. KNOWLEDGE MATCH: Use the 'BUSINESS PROFILE' & 'FAQ' from the custom sheet data above. Do not hallucinate outside info.
+2. ULTRA-CONCISE: Your entire response MUST NOT exceed 3 to 4 lines or bullet points. DO NOT print long paragraphs.
+3. NO PARAGRAPHS: Give answers strictly in short points. 
+4. NO MARKDOWN: NEVER use hashes (#) or stars/asterisks (*). Do not use bold/italic markdown.
+5. SPLIT BUBBLES: If the answer has multiple parts, use a double line break (\\n\\n) to separate them into 2 chat bubbles.
+6. FORMAT: Use emojis 📌✨ to make it look premium.
+7. NO CHATBOT FLUFF: Start immediately with the answer.
 `;
         } else {
              systemPrompt += `
