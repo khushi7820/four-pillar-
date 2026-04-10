@@ -110,11 +110,12 @@ Interested?
 [STAGE: DISCOVERY_SESSIONS]
 
 === RULES ===
-1. KNOWLEDGE: Answer specific questions briefly using context from BUSINESS PROFILE/SHEET.
-2. SCRIPT: Output the EXACT script block for the stage.
-3. NO CHATBOT FLUFF: No intros or summaries.
-4. MAX 2 BUBBLES: Split into 2 bubbles max matching WhatsApp patterns.
-5. PRIORITY: If a CUSTOM SCRIPT is provided in the "BUSINESS PROFILE" section, use it instead of the blocks above.
+1. KNOWLEDGE: Answer questions concisely using ONLY 4-5 bullet points or lines.
+2. SCRIPT: After answering, ALWAYS return to the script block for the CURRENT STAGE.
+3. NO CHATBOT FLUFF: No "Sure!", "Based on the info...", or long intros. Start with the answer.
+4. MOBILE VIEW: Write for a phone screen. MAX 5 lines total. No long paragraphs.
+5. NO REPETITION: Do NOT repeat sentences or phrases. Every word must be unique.
+6. PRIORITY: If a CUSTOM SCRIPT exists in the "KNOWLEDGE BASE" section, use it.
 `;
 
 export type UserStageData = {

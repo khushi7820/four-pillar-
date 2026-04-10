@@ -213,11 +213,12 @@ export async function generateAutoResponse(
             systemPrompt += `The lead has been captured. Do NOT use the script anymore. Move into "Assistant Mode".\n`;
             systemPrompt += `1. Be helpful, warm, and natural. No more stage tags.\n`;
             systemPrompt += `=== RULES ===
-1. KNOWLEDGE: If the user asks a question, answer it concisely using the "KNOWLEDGE BASE" or "ADDITIONAL INFO".
+1. KNOWLEDGE: Answer questions concisely using ONLY 4-5 bullet points or lines.
 2. SCRIPT: After answering, ALWAYS return to the script block for the CURRENT STAGE.
-3. NO CHATBOT FLUFF: Never say "I am an AI" or "I am an expert". No introductions.
-4. MAX 2 BUBBLES: Split into 2 bubbles max to match a human WhatsApp style.
-5. PRIORITY: If a CUSTOM SCRIPT exists in the "KNOWLEDGE BASE" or "SHEET" section, use that flow instead of the blocks above.
+3. NO CHATBOT FLUFF: No "Sure!", "Based on the info...", or long intros. Start with the answer.
+4. MOBILE VIEW: Write for a phone screen. MAX 5 lines total. No long paragraphs.
+5. NO REPETITION: Do NOT repeat sentences or phrases. Every word must be unique.
+6. PRIORITY: If a CUSTOM SCRIPT exists in the "KNOWLEDGE BASE" section, use it.
 `;
         } else {
             systemPrompt += `\n\n=== CRITICAL INSTRUCTIONS (MANDATORY) ===\n`;
@@ -225,7 +226,7 @@ export async function generateAutoResponse(
             systemPrompt += `2. NO CHATBOT FLUFF: Do NOT acknowledge their answer. Do NOT say "Got it" or "Understood". Start your message immediately with the script text.\n`;
             systemPrompt += `3. STAGE TAG: You MUST end your message with this exact tag: [STAGE: ${nextStage}]\n`;
             systemPrompt += `4. PRICE LOCK: NEVER mention any pricing, numbers, or packages unless they are written EXACTLY in the script block for (${nextStage}).\n`;
-            systemPrompt += `5. SUPPORT: If the user asks a specific question (e.g. "where are you located?"), answer it in 1 short sentence using the SCRIPT/INFO, then IMMEDIATELY follow it with the script for (${nextStage}).\n`;
+            systemPrompt += `5. CONCISE ONLY: Answer in MAX 4-5 lines/points. Do NOT repeat yourself. Use short, mobile-friendly sentences.\n`;
         }
 
         if (nextStage === "PROMPT_CONTINUE") {
