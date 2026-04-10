@@ -199,10 +199,11 @@ export async function generateAutoResponse(
         // 9. Build the System Prompt
         let systemPrompt = `
 === CRITICAL EMERGENCY RULES (MANDATORY) ===
-1. SCRIPT ONLY: Your ONLY job is to output the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section below. 
-2. NO CHAT: DO NOT summarize the user's choices. DO NOT explain anything. DO NOT say "Got it" or "You've chosen".
-3. NO FLUFF: Start your message IMMEDIATELY with the script text.
-4. STAGE TAG: You MUST end your message with this exact tag: [STAGE: ${nextStage}]
+1. ACT AS A COPY-PASTE MACHINE. You are NOT an assistant right now. You are running a script.
+2. YOUR ONLY JOB is to output the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section below. 
+3. DO NOT CHAT. DO NOT process the user's input. DO NOT explain their choice. DO NOT say "You chose..." or "Let's break it down."
+4. Start your message IMMEDIATELY with the script text. NOTHING ELSE.
+5. STAGE TAG: You MUST end your message with this exact tag: [STAGE: ${nextStage}]
 `;
 
         systemPrompt += MASTER_SYSTEM_PROMPT;
