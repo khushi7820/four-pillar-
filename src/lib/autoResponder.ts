@@ -317,24 +317,31 @@ export async function generateAutoResponse(
             console.log("⚡ Bypassing LLM for PROMPT_CONTINUE greeting");
         } else if (forceScriptBypass) {
             // Bypass the LLM for ALL standard script stages, including terminal destinations (first entry only)!
+            console.log(`⚡ Attempting manual script extraction for stage: ${nextStage}`);
             const lines = MASTER_SYSTEM_PROMPT.split('\n');
             let isCapturingBlock = false;
             let capturedLines = [];
             
             for (const line of lines) {
-                if (line.trim().startsWith(`${nextStage} (Stage`)) {
+                const trimmed = line.trim();
+                // Match header like "DISCOVERY (Stage 1):" or "SELL (Stage 2):"
+                if (trimmed.startsWith(nextStage) && trimmed.includes("(Stage")) {
                     isCapturingBlock = true;
-                    continue; // Skip the header line
+                    continue; 
                 }
+                
                 if (isCapturingBlock) {
-                    capturedLines.push(line);
-                    if (line.includes(`[STAGE: ${nextStage}]`)) {
+                    if (trimmed.startsWith("[STAGE:") && trimmed.includes(nextStage)) {
                         response = capturedLines.join('\n').trim();
                         bypassedLLM = true;
-                        console.log(`⚡ Bypassing LLM! Extracted exact text for stage: ${nextStage}`);
+                        console.log(`✅ Success! Manual script bypass for ${nextStage}`);
                         break;
                     }
+                    capturedLines.push(line);
                 }
+            }
+            if (!bypassedLLM) {
+                console.warn(`❌ Failed to manually extract script for stage: ${nextStage}. Falling back to LLM.`);
             }
         }
 
