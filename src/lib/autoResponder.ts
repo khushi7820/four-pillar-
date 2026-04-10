@@ -144,7 +144,7 @@ export async function generateAutoResponse(
             "PROMPT_CONTINUE": "DISCOVERY" // Fallback if they say anything
         };
 
-        const isGreeting = /^(hey|hi|hello|menu)$/i.test(messageText.trim());
+        const isGreeting = /^(hey|hi|hello|menu|hy|hyy|hii|hiii|heyy|heyyy|namaste|kem cho|kese ho|kaise ho)$/i.test(messageText.trim());
         const isStartFresh = /^(start fresh|fresh one|fresh|new topic|new|restart|start new|start over|start again)$/i.test(messageText.trim());
         const isContinue = /^(continue|same|old|yes|y)$/i.test(messageText.trim());
 
