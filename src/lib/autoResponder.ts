@@ -197,48 +197,41 @@ export async function generateAutoResponse(
 
         console.log(`➡️ Calculated Next Stage: ${nextStage} (Current: ${userStageData.current_stage})`);
 
-        // Add current state (for AI's internal knowledge ONLY)
-        systemPrompt += `\n\n=== CONTEXT ===\n`;
-        systemPrompt += `- Detected Language: ${detectedLanguage}\n`;
-        // 8. Build the final prompt with Rules at the VERY END for maximum influence
-        systemPrompt += `\n\n=== ADDITIONAL INFO (For specific questions only) ===\n${contextText || "No additional info."}\n`;
-
-        systemPrompt += `\n\n=== FINAL DATA FOR THIS RESPONSE ===\n`;
-        systemPrompt += `- User Language: ${detectedLanguage}\n`;
-        systemPrompt += `- Current Stage: ${isStartFresh ? "DISCOVERY" : userStageData.current_stage}\n`;
-        systemPrompt += `- Target Stage: ${nextStage}\n`;
-
-        if (nextStage === "HOT_LEAD" || userStageData.current_stage === "HOT_LEAD") {
-            systemPrompt += `\n\n=== CRITICAL INSTRUCTIONS ===\n`;
-            systemPrompt += `The lead has been captured. Do NOT use the script anymore. Move into "Assistant Mode".\n`;
-            systemPrompt += `1. Be helpful, warm, and natural. No more stage tags.\n`;
-            systemPrompt += `=== RULES ===
-1. KNOWLEDGE: Answer questions concisely using ONLY 4-5 bullet points or lines.
-2. SCRIPT: After answering, ALWAYS return to the script block for the CURRENT STAGE.
-3. NO CHATBOT FLUFF: No "Sure!", "Based on the info...", or long intros. Start with the answer.
-4. MOBILE VIEW: Write for a phone screen. MAX 5 lines total. No long paragraphs.
-5. NO REPETITION: Do NOT repeat sentences or phrases. Every word must be unique.
-6. PRIORITY: If a CUSTOM SCRIPT exists in the "KNOWLEDGE BASE" section, use it.
+        // 9. Build the System Prompt
+        let systemPrompt = `
+=== CRITICAL EMERGENCY RULES (MANDATORY) ===
+1. SCRIPT ONLY: Your ONLY job is to output the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section below. 
+2. NO CHAT: DO NOT summarize the user's choices. DO NOT explain anything. DO NOT say "Got it" or "You've chosen".
+3. NO FLUFF: Start your message IMMEDIATELY with the script text.
+4. STAGE TAG: You MUST end your message with this exact tag: [STAGE: ${nextStage}]
 `;
-        } else {
-            systemPrompt += `\n\n=== CRITICAL INSTRUCTIONS (MANDATORY) ===\n`;
-            systemPrompt += `1. COPY PASTE ONLY: Your ONLY job is to output the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section above.\n`;
-            systemPrompt += `2. NO CHATBOT FLUFF: Do NOT acknowledge their answer. Do NOT say "Got it" or "Understood". Start your message immediately with the script text.\n`;
-            systemPrompt += `3. STAGE TAG: You MUST end your message with this exact tag: [STAGE: ${nextStage}]\n`;
-            systemPrompt += `4. PRICE LOCK: NEVER mention any pricing, numbers, or packages unless they are written EXACTLY in the script block for (${nextStage}).\n`;
-            systemPrompt += `5. CONCISE ONLY: Answer in MAX 4-5 lines/points. Do NOT repeat yourself. Use short, mobile-friendly sentences.\n`;
+
+        systemPrompt += MASTER_SYSTEM_PROMPT;
+        
+        if (customSystemPrompt) {
+            systemPrompt += `\n\n=== BUSINESS PROFILE & CUSTOM SCRIPT ===\n${customSystemPrompt}\n`;
         }
 
-        if (nextStage === "PROMPT_CONTINUE") {
-            systemPrompt += `SPECIAL TASK: The user said hello. Offer to continue the conversation: "Would you like to continue our previous conversation, or should we start fresh?" [STAGE: ${userStageData.current_stage}]\n`;
+        const isCaptured = nextStage === "HOT_LEAD" || userStageData.current_stage === "HOT_LEAD";
+        if (isCaptured) {
+            systemPrompt += `\n\n=== ASSISTANT MODE (LEAD CAPTURED) ===\n`;
+            systemPrompt += `The lead has been captured. Do NOT use the script anymore. Move into "Assistant Mode".\n`;
+            systemPrompt += `1. Answer concisely using ONLY 4-5 bullet points or lines.\n`;
+            systemPrompt += `2. NO CHATBOT FLUFF: No long intros. Start with the answer.\n`;
         }
 
         if (isStartFresh) {
-            systemPrompt += `\n\n=== CRITICAL EMERGENCY RULE ===\n`;
-            systemPrompt += `1. The user wants to START FRESH. You MUST output ONLY the script for [Stage: DISCOVERY].\n`;
-            systemPrompt += `2. DO NOT introduce yourself. DO NOT say "Starting fresh!". Just output the Discovery text.\n`;
-            systemPrompt += `3. IGNORE all previous "Collected Info" like budget, goals, or branding status.\n`;
+            systemPrompt += `\n\n=== FRESH START OVERRIDE ===\n`;
+            systemPrompt += `1. User wants to START FRESH. Output ONLY the DISCOVERY script.\n`;
+            systemPrompt += `2. IGNORE all previous data.\n`;
         }
+
+        // Add current state (for AI's internal knowledge ONLY)
+        systemPrompt += `\n\n=== CONTEXT ===\n`;
+        systemPrompt += `- Detected Language: ${detectedLanguage}\n`;
+        systemPrompt += `- Current Stage: ${isStartFresh ? "DISCOVERY" : userStageData.current_stage}\n`;
+        systemPrompt += `- Target Stage: ${nextStage}\n`;
+        systemPrompt += `\n\n=== ADDITIONAL INFO (For specific questions only) ===\n${contextText || "No additional info."}\n`;
 
         systemPrompt += `\n\n3. LINK BAN: NEVER use the link "${BROKEN_LINK}". It is broken. Only use links from SCRIPT/KNOWLEDGE BASE.\n`;
 
