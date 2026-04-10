@@ -126,10 +126,13 @@ export async function generateAutoResponse(
 
         console.log(`Pre-processing took ${Date.now() - startTime}ms (Gap: ${timeGapDays.toFixed(1)} days)`);
 
-        // 7. Build the system prompt using the master persona ONLY
-        // We IGNORE custom prompts to ensure the script mirror is perfect
-        let systemPrompt: string = MASTER_SYSTEM_PROMPT;
+        // 7. Build the system prompt using the database prompt if available, 
+        // fallback to the master persona ONLY if empty.
+        let systemPrompt: string = phoneMapping.system_prompt || MASTER_SYSTEM_PROMPT;
 
+        // 7.5 Check for a dynamic stage map in the system prompt
+        // If the prompt contains a JSON or specific block for STAGE_MAP, we could parse it here.
+        // For now, we'll stick to a robust default but allow it to be overriden.
         const STAGE_MAP: Record<string, string> = {
             "DISCOVERY": "SELL",
             "SELL": "CUSTOMER",
@@ -143,6 +146,17 @@ export async function generateAutoResponse(
             "DISCOVERY_SESSIONS": "HOT_LEAD",
             "PROMPT_CONTINUE": "DISCOVERY" // Fallback if they say anything
         };
+
+        // If the prompt contains a [FLOW: STAGE1->STAGE2, STAGE2->STAGE3] pattern, we could parse it.
+        // This makes the "Sync Flow" from sheet possible.
+        const flowMatches = systemPrompt.match(/\[FLOW:\s*(.*?)\]/);
+        if (flowMatches) {
+            const flowPairs = flowMatches[1].split(",").map(p => p.trim());
+            for (const pair of flowPairs) {
+                const [curr, next] = pair.split("->").map(s => s.trim());
+                if (curr && next) STAGE_MAP[curr] = next;
+            }
+        }
 
         const isGreeting = /^(hey|hi|hello|menu|hy|hyy|hii|hiii|heyy|heyyy|namaste|kem cho|kese ho|kaise ho)$/i.test(messageText.trim());
         const isStartFresh = /^(start fresh|fresh one|fresh|new topic|new|restart|start new|start over|start again)$/i.test(messageText.trim());

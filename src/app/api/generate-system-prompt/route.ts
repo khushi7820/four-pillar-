@@ -69,64 +69,157 @@ Ensure the tone is casual, friendly, and human.`,
 
 // ─── ROUTE HANDLER ────────────────────────────────────────────────────────────
 
+async function syncFromSheet(phoneNumber: string): Promise<string | null> {
+    try {
+        console.log(`Starting sheet sync for ${phoneNumber}`);
+        // 1. Get sheet mapping
+        const { data: mapping } = await supabase
+            .from("google_sheet_mappings")
+            .select("sheet_id")
+            .eq("phone_number", phoneNumber)
+            .single();
+
+        if (!mapping || !mapping.sheet_id) {
+            console.log("No sheet mapping found for sync");
+            return null;
+        }
+
+        const { readGoogleSheet, getSpreadsheetSheets } = await import("@/lib/googleSheet");
+        
+        // 2. Try to find a "Script" or "Flow" tab, fallback to first tab
+        const allTabs = await getSpreadsheetSheets(mapping.sheet_id);
+        const scriptTab = allTabs.find(t => t.toLowerCase() === "script" || t.toLowerCase() === "flow") || allTabs[0];
+        
+        console.log(`Using tab "${scriptTab}" for script sync`);
+        
+        // 3. Read the sheet (A: Stage Name, B: Message, C: Next Stage)
+        const rows = await readGoogleSheet(mapping.sheet_id, `${scriptTab}!A1:C100`);
+        if (!rows || rows.length <= 1) return null;
+
+        // Skip header
+        const dataRows = rows.slice(1);
+        
+        let scriptBlocks = "";
+        let flowTransitions: string[] = [];
+        
+        dataRows.forEach((row, index) => {
+            const stageName = (row[0] || "").toString().trim().toUpperCase();
+            const message = (row[1] || "").toString().trim();
+            const nextStage = (row[2] || "").toString().trim().toUpperCase();
+
+            if (stageName && message) {
+                scriptBlocks += `\n${stageName} (Stage ${index + 1}):\n${message}\n`;
+                if (nextStage) {
+                    flowTransitions.push(`${stageName}->${nextStage}`);
+                }
+            }
+        });
+
+        if (!scriptBlocks) return null;
+
+        const flowTag = flowTransitions.length > 0 ? `\n\n[FLOW: ${flowTransitions.join(", ")}]` : "";
+
+        // Construct the full prompt
+        const persona = `ROLE: You are the Official Script Player for this business.
+
+=== YOUR ONLY TASK ===
+Return the EXACT script block for the CURRENT STAGE. 
+Do not add introductions. Do not summarize. Do not explain.
+
+=== SCRIPT BLOCKS (FOLLOW SEQUENTIALLY) ===
+${scriptBlocks}
+${flowTag}
+
+=== RULES ===
+1. NO BOLD (*). NO STARS.
+2. NO CHATTY INTROS.
+3. BE EXTREMELY BRIEF.
+4. MAX 2 BUBBLES.`;
+
+        return persona;
+    } catch (error) {
+        console.error("Error syncing from sheet:", error);
+        return null;
+    }
+}
+
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { intent, phone_number, custom_prompt } = body;
+        const { intent, phone_number, custom_prompt, sync_from_sheet } = body;
 
-        if (!intent || !phone_number) {
-            return NextResponse.json({ error: "intent and phone_number are required" }, { status: 400 });
+        if (!phone_number) {
+            return NextResponse.json({ error: "phone_number is required" }, { status: 400 });
         }
 
-        const messages = buildMessages(intent, custom_prompt);
-        let generatedPersona = "";
+        let cleanPersona = "";
+        let isSynced = false;
 
-        const { data: currentMapping } = await supabase
-            .from("phone_document_mapping")
-            .select("gemini_api_key, groq_api_key")
-            .eq("phone_number", phone_number)
-            .single();
-
-        const groqKey = currentMapping?.groq_api_key || process.env.GROQ_API_KEY;
-        const geminiKey = currentMapping?.gemini_api_key || process.env.GEMINI_API_KEY;
-
-        async function tryGroq() {
-            if (!groqKey) throw new Error("Groq API key not configured");
-            const localGroq = new Groq({ apiKey: groqKey });
-            const completion = await localGroq.chat.completions.create({
-                messages,
-                model: "llama-3.3-70b-versatile",
-                temperature: 0.7,
-                max_tokens: 400,
-            });
-            return completion.choices[0]?.message?.content || "";
+        // Try syncing from sheet first if requested or if it's the primary way
+        if (sync_from_sheet !== false) {
+             const syncedPrompt = await syncFromSheet(phone_number);
+             if (syncedPrompt) {
+                 cleanPersona = syncedPrompt;
+                 isSynced = true;
+             }
         }
 
-        async function tryGemini() {
-            if (!geminiKey) throw new Error("Gemini API key not configured");
-            const localGenAI = new GoogleGenerativeAI(geminiKey);
-            const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-            const result = await model.generateContent({
-                contents: [{
-                    role: "user",
-                    parts: [{ text: messages[0].content + "\n\n" + messages[1].content }],
-                }],
-            });
-            return result.response.text();
+        // Fallback to AI generation if sync failed or wasn't requested
+        if (!cleanPersona) {
+            if (!intent) {
+                 return NextResponse.json({ error: "intent is required for AI generation" }, { status: 400 });
+            }
+            const messages = buildMessages(intent, custom_prompt);
+            
+            const { data: currentMapping } = await supabase
+                .from("phone_document_mapping")
+                .select("gemini_api_key, groq_api_key")
+                .eq("phone_number", phone_number)
+                .single();
+
+            const groqKey = currentMapping?.groq_api_key || process.env.GROQ_API_KEY;
+            const geminiKey = currentMapping?.gemini_api_key || process.env.GEMINI_API_KEY;
+
+            async function tryGroq() {
+                if (!groqKey) throw new Error("Groq API key not configured");
+                const localGroq = new Groq({ apiKey: groqKey });
+                const completion = await localGroq.chat.completions.create({
+                    messages,
+                    model: "llama-3.3-70b-versatile",
+                    temperature: 0.7,
+                    max_tokens: 400,
+                });
+                return completion.choices[0]?.message?.content || "";
+            }
+
+            async function tryGemini() {
+                if (!geminiKey) throw new Error("Gemini API key not configured");
+                const localGenAI = new GoogleGenerativeAI(geminiKey);
+                const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                const result = await model.generateContent({
+                    contents: [{
+                        role: "user",
+                        parts: [{ text: messages[0].content + "\n\n" + messages[1].content }],
+                    }],
+                });
+                return result.response.text();
+            }
+
+            let generatedPersona = "";
+            try {
+                generatedPersona = await tryGroq();
+            } catch (e) {
+                console.warn("Groq failed, trying Gemini...");
+                generatedPersona = await tryGemini();
+            }
+
+            if (!generatedPersona) throw new Error("Failed to generate prompt");
+            cleanPersona = sanitizeSystemPrompt(generatedPersona);
         }
 
-        try {
-            generatedPersona = await tryGroq();
-        } catch (e) {
-            console.warn("Groq failed, trying Gemini...");
-            generatedPersona = await tryGemini();
-        }
-
-        if (!generatedPersona) throw new Error("Failed to generate prompt");
-
-        const cleanPersona = sanitizeSystemPrompt(generatedPersona);
         const finalSystemPrompt = `${cleanPersona}\n\n${HUMAN_GUARDRAILS}`;
 
+        // Save to database
         const { data: existing } = await supabase
             .from("phone_document_mapping")
             .select("*")
@@ -135,20 +228,21 @@ export async function POST(req: NextRequest) {
         if (existing && existing.length > 0) {
             await supabase
                 .from("phone_document_mapping")
-                .update({ intent, system_prompt: finalSystemPrompt })
+                .update({ intent: intent || "Synced from Sheet", system_prompt: finalSystemPrompt })
                 .eq("phone_number", phone_number);
         } else {
             await supabase
                 .from("phone_document_mapping")
                 .insert({
                     phone_number,
-                    intent,
+                    intent: intent || "Synced from Sheet",
                     system_prompt: finalSystemPrompt,
                 });
         }
 
         return NextResponse.json({
             success: true,
+            synced: isSynced,
             system_prompt: finalSystemPrompt,
             persona_section: cleanPersona,
         });
