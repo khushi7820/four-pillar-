@@ -214,11 +214,11 @@ export async function generateAutoResponse(
         if (isCaptured) {
             systemPrompt += `
 \n\n=== CRITICAL FINAL COMMAND (ASSISTANT MODE) ===
-1. ACT AS AN ASSISTANT. The lead is captured. DO NOT use the sales script anymore.
-2. DO NOT output the HOT_LEAD script again.
-3. Answer the user's question concisely using the "BUSINESS PROFILE & CUSTOM SCRIPT" provided above.
-4. Keep answers to 4-5 bullet points or lines maximum.
-5. NO CHATBOT FLUFF: Start immediately with the answer. Do not say "Sure!" or "Here is...".
+1. ACT AS AN EXPERT STRATEGIST. The lead is now asking questions. DO NOT output the HOT_LEAD script again.
+2. YOUR GOAL: Answer the exact question the user just asked.
+3. KNOWLEDGE MATCH: Use the 'BUSINESS PROFILE' & 'FAQ' from the custom sheet data above. Do not hallucinate outside info.
+4. FORMAT: You MUST format your answer point-wise with emojis 📌✨. Match the premium style of the sheet exactly.
+5. NO CHATBOT FLUFF: Never say "Sure, I can help" or "According to the sheet". Start directly with the answer.
 `;
         } else {
              systemPrompt += `
