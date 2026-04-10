@@ -270,8 +270,8 @@ export async function generateAutoResponse(
             response = `"Welcome back! Would you like to continue our previous conversation, or should we start fresh?"\n[STAGE: ${userStageData.current_stage}]`;
             bypassedLLM = true;
             console.log("⚡ Bypassing LLM for PROMPT_CONTINUE greeting");
-        } else if (!isCaptured) {
-            // Only try to bypass if we are strictly in script mode
+        } else if (!isCaptured || nextStage === "HOT_LEAD") {
+            // Bypass the LLM for ALL standard script stages, including the HOT_LEAD destination!
             const lines = MASTER_SYSTEM_PROMPT.split('\n');
             let isCapturingBlock = false;
             let capturedLines = [];
