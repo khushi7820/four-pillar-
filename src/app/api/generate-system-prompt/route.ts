@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
             async function tryGemini() {
                 if (!geminiKey) throw new Error("Gemini API key not configured");
                 const localGenAI = new GoogleGenerativeAI(geminiKey);
-                const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash" }, { apiVersion: "v1" });
                 const result = await model.generateContent({
                     contents: [{
                         role: "user",

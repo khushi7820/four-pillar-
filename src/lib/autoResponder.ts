@@ -173,7 +173,7 @@ export async function generateAutoResponse(
             if (!geminiKey) throw new Error("Gemini API key not configured");
             console.log("Attempting Gemini 1.5 Flash (Primary)...");
             const localGenAI = new GoogleGenerativeAI(geminiKey);
-            const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash" }, { apiVersion: "v1" });
 
             // Format messages for Gemini
             const geminiMessages = messages.map(m => ({
@@ -203,17 +203,18 @@ export async function generateAutoResponse(
         }
 
         try {
-            // Priority 1: Gemini 1.5 Flash (Primary as per user preference)
-            response = await tryGemini();
-            console.log(`Gemini success (Primary) in ${Date.now() - attemptStartTime}ms`);
-        } catch (geminiError: any) {
-            console.warn("Gemini failed, trying Groq 70B...", geminiError.message);
+            // Priority 1: Groq 70B (Primary as requested)
+            attemptStartTime = Date.now();
+            response = await tryGroq("llama-3.3-70b-versatile");
+            console.log(`Groq 70B success (Primary) in ${Date.now() - attemptStartTime}ms`);
+        } catch (groqError: any) {
+            console.warn("Groq 70B failed, trying Gemini...", groqError.message);
             try {
-                // Priority 2: Groq 70B (Fallback)
+                // Priority 2: Gemini 1.5 Flash (Fallback)
                 attemptStartTime = Date.now();
-                response = await tryGroq("llama-3.3-70b-versatile");
-                console.log(`Groq 70B success (Fallback) in ${Date.now() - attemptStartTime}ms`);
-            } catch (groqError: any) {
+                response = await tryGemini();
+                console.log(`Gemini success (Fallback) in ${Date.now() - attemptStartTime}ms`);
+            } catch (geminiError: any) {
                 console.error("All AI models failed!");
                 return { success: false, error: "AI service unavailable" };
             }
