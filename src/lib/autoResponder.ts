@@ -260,9 +260,41 @@ export async function generateAutoResponse(
 
         console.log(`Sending to LLM with ${messages.length} total messages. Target Stage: ${nextStage}`);
 
-        // 10. Generate response with Priority Order (Groq 70B -> Groq 8B -> Gemini)
+        // --- HARDCODED SCRIPT BYPASS (SAVE TOKENS & KILL HALLUCINATIONS) ---
         let response = "";
+        let bypassedLLM = false;
+
+        if (nextStage === "PROMPT_CONTINUE") {
+            response = `"Welcome back! Would you like to continue our previous conversation, or should we start fresh?"\n[STAGE: ${userStageData.current_stage}]`;
+            bypassedLLM = true;
+            console.log("⚡ Bypassing LLM for PROMPT_CONTINUE greeting");
+        } else if (!isCaptured) {
+            // Only try to bypass if we are strictly in script mode
+            const lines = MASTER_SYSTEM_PROMPT.split('\n');
+            let isCapturingBlock = false;
+            let capturedLines = [];
+            
+            for (const line of lines) {
+                if (line.trim().startsWith(`${nextStage} (Stage`)) {
+                    isCapturingBlock = true;
+                    continue; // Skip the header line
+                }
+                if (isCapturingBlock) {
+                    capturedLines.push(line);
+                    if (line.includes(`[STAGE: ${nextStage}]`)) {
+                        response = capturedLines.join('\n').trim();
+                        bypassedLLM = true;
+                        console.log(`⚡ Bypassing LLM! Extracted exact text for stage: ${nextStage}`);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 10. Generate response with Priority Order (Groq 70B -> Groq 8B -> Gemini)
         let attemptStartTime = Date.now();
+
+        if (!bypassedLLM) {
 
         // Use custom keys or default env vars
         const geminiKey = phoneMapping.gemini_api_key || process.env.GEMINI_API_KEY;
@@ -324,11 +356,11 @@ export async function generateAutoResponse(
                 }
             }
         }
+        } // Close if (!bypassedLLM)
 
-        // 11. FORCE PROGRESSION (Ignore AI hallucinations, follow the map)
-        const stageUpdateMatch = response.match(/\[STAGE:\s*(.*?)\]/i);
-        // If AI gives a tag, use it. Otherwise, use nextStage (which we calculated earlier)
-        let newStage = stageUpdateMatch ? stageUpdateMatch[1].trim() : nextStage;
+        // 11. FORCE PROGRESSION (Absolute Lockdown)
+        // We no longer trust the AI's regex tags. The calculated nextStage is ABSOLUTE.
+        let newStage = nextStage;
 
         // Ensure we don't accidentally save 'PROMPT_CONTINUE' as a DB state (we keep their old state instead)
         if (newStage === "PROMPT_CONTINUE") {
