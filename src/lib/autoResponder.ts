@@ -145,7 +145,7 @@ export async function generateAutoResponse(
         
         // If the current message IS a start fresh, or we found one in history, slice accordingly
         const cleanHistoryChunks = lastFreshIndex !== -1 ? history.slice(lastFreshIndex + 1) : history;
-        const finalHistory = cleanHistoryChunks.slice(-10); // Still limit to 10 for rate limits
+        const finalHistory = cleanHistoryChunks.slice(-5); // Emergency limit to 5 to avoid 100k shutdown
 
         console.log(`Pre-processing took ${Date.now() - startTime}ms (Gap: ${timeGapDays.toFixed(1)} days)`);
 
