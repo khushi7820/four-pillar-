@@ -186,7 +186,6 @@ export async function generateAutoResponse(
         systemPrompt += `\n\n=== ADDITIONAL INFO (For specific questions only) ===\n${contextText || "No additional info."}\n`;
 
         systemPrompt += `\n\n=== FINAL DATA FOR THIS RESPONSE ===\n`;
-        systemPrompt += `- Your Identity: Expert Sales Assistant\n`;
         systemPrompt += `- User Language: ${detectedLanguage}\n`;
         systemPrompt += `- Current Stage: ${userStageData.current_stage}\n`;
         systemPrompt += `- Target Stage: ${nextStage}\n`;
@@ -195,8 +194,13 @@ export async function generateAutoResponse(
             systemPrompt += `\n\n=== CRITICAL INSTRUCTIONS ===\n`;
             systemPrompt += `The lead has been captured. Do NOT use the script anymore. Move into "Assistant Mode".\n`;
             systemPrompt += `1. Be helpful, warm, and natural. No more stage tags.\n`;
-            systemPrompt += `2. Answer follow-up questions using ONLY the SCRIPT or BUSINESS PROFILE.\n`;
-            systemPrompt += `3. If the user says thanks/ok, wish them a great day and say the team will call.\n`;
+            systemPrompt += `=== RULES ===
+1. KNOWLEDGE: If the user asks a question, answer it concisely using the "KNOWLEDGE BASE" or "ADDITIONAL INFO".
+2. SCRIPT: After answering, ALWAYS return to the script block for the CURRENT STAGE.
+3. NO CHATBOT FLUFF: Never say "I am an AI" or "I am an expert". No introductions.
+4. MAX 2 BUBBLES: Split into 2 bubbles max to match a human WhatsApp style.
+5. PRIORITY: If a CUSTOM SCRIPT exists in the "KNOWLEDGE BASE" or "SHEET" section, use that flow instead of the blocks above.
+`;
         } else {
             systemPrompt += `\n\n=== CRITICAL INSTRUCTIONS (MANDATORY) ===\n`;
             systemPrompt += `1. COPY PASTE ONLY: Your ONLY job is to output the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section above.\n`;
@@ -215,7 +219,7 @@ export async function generateAutoResponse(
                 role: "system" as const,
                 content: `${systemPrompt}`,
             },
-            ...history.slice(-20), // Last 20 messages for context
+            ...history.slice(-10), // Reduced to 10 messages to avoid Groq Rate Limits
             {
                 role: "user" as const,
                 content: messageText
