@@ -153,25 +153,22 @@ export async function generateAutoResponse(
 
         if (!userStageData.first_message_sent) {
             systemPrompt += `\n\n=== TASK ===\n`;
-            systemPrompt += `This is your first message. You MUST start with the EXACT FIRST MESSAGE from the script.\n`;
+            systemPrompt += `This is your first message. You MUST output EXACTLY the "DISCOVERY" stage text.\n`;
         } else if (isReturningUser) {
             systemPrompt += `\n\n=== RE-ENGAGEMENT TASK ===\n`;
             systemPrompt += `The user has returned after ${timeGapDays.toFixed(0)} days. \n`;
             systemPrompt += `If they are asking a DIFFERENT question or about a different service than before, you MUST ask: \n`;
             systemPrompt += `"Would you like to continue our previous conversation, or should we start fresh with this new inquiry?"\n`;
-            systemPrompt += `If they choose "START FRESH" or "NEW TOPIC", you MUST include the tag [STAGE: DISCOVERY] and restart the script.\n`;
-            systemPrompt += `Reply in ${detectedLanguage}. Keep it short and natural.\n`;
+            systemPrompt += `If they reply they want to "START FRESH" or "FRESH ONE", you MUST include the literal text "[STAGE: DISCOVERY]" to reset the database and output the DISCOVERY script.\n`;
         }
 
-        // PARAGRAPH BAN (STRICT)
-        systemPrompt += `\n\n=== RULES ===\n`;
-        systemPrompt += `1. NATURAL BUT CONCISE: Acknowledge what the user said naturally. Don't sound like a robot, but keep answers extremely short (1-2 sentences max).\n`;
-        systemPrompt += `2. SHEET-BASED FACTS: When providing services or costs, use ONLY the "ADDITIONAL INFO" provided. NEVER make up numbers.\n`;
-        systemPrompt += `3. NEVER REPEAT QUESTIONS: If the user replies, you MUST move forward to the next question. NEVER ask the same question twice.\n`;
-        systemPrompt += `4. SCRIPT PROGRESSION: During custom flows, always smoothly transition to the next step. Tag [STAGE: NEXT_STAGE_NAME] is required.\n`;
-        systemPrompt += `5. NO FLUFF: No long explanations or marketing speak.\n`;
-        systemPrompt += `6. CURRENCY: Rupees (₹/Rs) only.\n`;
-        systemPrompt += `7. 2 BUBBLES MAX.\n`;
+        // STRICT SCRIPT ENFORCEMENT
+        systemPrompt += `\n\n=== STRICT RULES ===\n`;
+        systemPrompt += `1. NO CHATBOT BEHAVIOR: Do not be chatty. Do not summarize. Do not acknowledge their answer.\n`;
+        systemPrompt += `2. COPY PASTE ONLY: Your ONLY job is to output the EXACT text for the Next Expected Stage (${nextStage}) from the SCRIPT BLOCKS above.\n`;
+        systemPrompt += `3. DO NOT MAKE UP PLANS: Never invent pricing, plans, or services. Just output the script block.\n`;
+        systemPrompt += `4. SCRIPT PROGRESSION: Always include the tag [STAGE: ${nextStage}] at the end of your message so the database updates.\n`;
+        systemPrompt += `5. If the next stage is HOT_LEAD, just output the HOT_LEAD text and stop.\n`;
 
         // 8. Add document context to system prompt (if any)
         if (contextText) {
@@ -234,19 +231,18 @@ export async function generateAutoResponse(
         }
 
         try {
-            // Priority 1: Groq 8B (Ultra-Fast & High Rate Limits)
-            // Best for high traffic testing to avoid 429 errors
-            response = await tryGroq("llama-3.1-8b-instant");
-            console.log(`Groq 8B success (Primary) in ${Date.now() - attemptStartTime}ms`);
-        } catch (groq8Error: any) {
-            console.warn("Groq 8B failed, trying Groq 70B...", groq8Error.message);
+            // Priority 1: Groq 70B (Reliable & Intelligent for Strict Instructions)
+            response = await tryGroq("llama-3.3-70b-versatile");
+            console.log(`Groq 70B success (Primary) in ${Date.now() - attemptStartTime}ms`);
+        } catch (groq70Error: any) {
+            console.warn("Groq 70B failed, trying Groq 8B...", groq70Error.message);
             try {
-                // Priority 2: Groq 70B (Reliable & Fast as Fallback)
+                // Priority 2: Groq 8B (Fallback)
                 attemptStartTime = Date.now();
-                response = await tryGroq("llama-3.3-70b-versatile");
-                console.log(`Groq 70B success (Fallback) in ${Date.now() - attemptStartTime}ms`);
-            } catch (groq70Error: any) {
-                console.error("Groq 70B also failed, trying Gemini...", groq70Error.message);
+                response = await tryGroq("llama-3.1-8b-instant");
+                console.log(`Groq 8B success (Fallback) in ${Date.now() - attemptStartTime}ms`);
+            } catch (groq8Error: any) {
+                console.error("Groq 8B also failed, trying Gemini...", groq8Error.message);
                 try {
                     // Priority 3: Gemini 1.5 Flash (Final Fallback)
                     attemptStartTime = Date.now();
