@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { embedText } from "./embeddings";
-import { retrieveRelevantChunksForPhoneNumber, retrieveChunksByKeyword } from "./retrieval";
+import { retrieveRelevantChunksForPhoneNumber } from "./retrieval";
 import { getFilesForPhoneNumber } from "./phoneMapping";
 import { sendWhatsAppMessage } from "./whatsappSender";
 import Groq from "groq-sdk";
@@ -62,10 +62,7 @@ export async function generateAutoResponse(
         // 2. Parallelize remaining data fetching using custom keys if available
         const [fileIds, queryEmbedding, historyResult, userStageData] = await Promise.all([
             getFilesForPhoneNumber(toNumber),
-            embedText(messageText, 3, phoneMapping.mistral_api_key).catch(err => {
-                console.warn("⚠️ Embedding generation failed (Mistral down?), continuing without context...", err.message);
-                return null;
-            }),
+            embedText(messageText, 3, phoneMapping.mistral_api_key),
             supabase
                 .from("whatsapp_messages")
                 .select("content_text, event_type, from_number, to_number, received_at")
@@ -101,28 +98,19 @@ export async function generateAutoResponse(
             };
         }
 
-        // 2. Vector Search (Depends on embedding)
-        let matches: any[] = [];
-        if (queryEmbedding) {
-            matches = await retrieveRelevantChunksForPhoneNumber(
-                queryEmbedding,
-                toNumber,
-                12
-            );
-        } else {
-            console.log("⚠️ Skipping vector search due to missing embedding.");
+        if (!queryEmbedding) {
+            return {
+                success: false,
+                error: "Failed to generate embedding",
+            };
         }
 
-        // Keyword fallback if Mistral is down and we got no context
-        if (matches.length === 0) {
-            console.log("⚠️ No vector matches — using keyword fallback search...");
-            matches = await retrieveChunksByKeyword(messageText, toNumber, 10).catch(() => []);
-            if (matches.length > 0) {
-                console.log(`✅ Keyword fallback found ${matches.length} relevant chunks.`);
-            } else {
-                console.log("❌ Keyword fallback also returned nothing.");
-            }
-        }
+        // 2. Vector Search (Depends on embedding)
+        const matches = await retrieveRelevantChunksForPhoneNumber(
+            queryEmbedding,
+            toNumber,
+            12
+        );
 
         const contextText = matches.length > 0
             ? matches.map((m) => m.chunk).join("\n\n")
@@ -163,9 +151,10 @@ export async function generateAutoResponse(
         console.log(`Pre-processing took ${Date.now() - startTime}ms (Gap: ${timeGapDays.toFixed(1)} days)`);
 
         // 7. Get any custom prompt from the sheet
-        // IMPORTANT: Only use this in Assistant Mode (captured). During the flow, MASTER_SYSTEM_PROMPT handles everything.
-        // The DB system_prompt ("I'm a media expert...") was overriding the sales flow — now it's restricted to assistant mode only.
         let customContent = "";
+        if (customSystemPrompt) {
+            customContent = `\n\n=== BUSINESS PROFILE & CUSTOM SCRIPT ===\n${customSystemPrompt}\n`;
+        }
 
         const STAGE_MAP: Record<string, string> = {
             "DISCOVERY": "SELL",
@@ -239,19 +228,8 @@ export async function generateAutoResponse(
             nextStage = "DISCOVERY";
             // Important: We don't slice the actual DB history, but we slice what we send to the LLM
         } else {
-            // Smart check: If user asks a question, DO NOT advance
-            // If they pick a choice (matches A., B., C., D. or started with a dot), always advance.
-            const trimmed = messageText.trim().toLowerCase();
-            const isChoice = /^\.?\s*[A-D]\.?\s/i.test(messageText.trim()) || messageText.trim().length < 5 || /^(physical|service|digital|mix|individual|consumer|business|both|nothing|have a|strong|haven|tried|active|running|build|generate|grow|full|under|starting|early|growing|established|not clearly|not right|yes|no |don't|do it|in-house)/i.test(trimmed);
-            const isQuestion = !isChoice && (messageText.includes("?") || /\b(what is|how .+work|why |who is|where |when |tell me|show me|can you|help me|explain|broucher|brochure|blue.?print|pricing|kya h|kese|kaise|batao|samjha|dikha)\b/i.test(messageText));
-            
-            if (isQuestion) {
-                console.log("❓ Question detected - staying in current stage to answer.");
-                nextStage = userStageData.current_stage;
-            } else {
-                console.log("🔄 Choice/Answer received - forces advancement to next stage.");
-                // nextStage was already calculated by STAGE_MAP lookup
-            }
+            // WE NOW LET THE AI DECIDE IF IT SHOULD ADVANCE BASED ON INTENT
+            console.log("🤖 Entering Hybrid Flow Mode - AI will decide to advance or answer.");
         }
 
         console.log(`➡️ Calculated Next Stage: ${nextStage} (Current: ${userStageData.current_stage})`);
@@ -264,14 +242,11 @@ export async function generateAutoResponse(
         // ONLY show the script if we are NOT in Assistant Mode
         if (!isCaptured) {
             systemPrompt += MASTER_SYSTEM_PROMPT;
-            // During flow: DO NOT inject DB custom prompt — it overrides the sales script
         } else {
             systemPrompt += `\n\n=== ASSISTANT MODE ACTIVE ===\nYour goal is to answer questions using the knowledge base below.\n`;
-            // In assistant mode: optionally use DB persona if set
-            if (customSystemPrompt) {
-                systemPrompt += `\n\n=== BUSINESS CONTEXT ===\n${customSystemPrompt}\n`;
-            }
         }
+
+        systemPrompt += customContent;
 
         // Add context & FAQ info EARLY so they are "above" the final commands
         systemPrompt += `\n\n=== CONTEXT ===\n`;
@@ -293,29 +268,23 @@ export async function generateAutoResponse(
         if (isCaptured) {
             systemPrompt += `
 \n\n=== CRITICAL FINAL COMMAND (ASSISTANT MODE) ===
-1. CHAT MODE: The sales script is COMPLETE. You are now a helpful Assistant.
-2. DO NOT REPEAT SCRIPT: Never output Stage 1-14 script blocks again.
-3. SHEET-ONLY ANSWERS: Search the Google Sheet data above (Persona, Convo, FAQ sections). Find the answer that matches the user's question and REPRODUCE IT AS-IS. Do NOT add your own words.
-4. NEVER EXPOSE INTERNAL DATA: The "Leads" section (NURTURE/WARM/HOT classification, lead scoring, internal workflows) is BACKEND DATA ONLY. NEVER show lead types, lead categories, or internal classification to the user. This is strictly confidential.
-5. SERVICE QUESTIONS: When user asks about services or offers, search ONLY the Persona and FAQ sections for service names like "The Look", "The System", "The Reach" etc. List them briefly.
-6. NO HALLUCINATION: If the answer is NOT in the sheet, say "I'll connect you with our strategist for more details on this."
-7. ACKNOWLEDGEMENTS: If the user just says "ok", "okk", "kk", "done", "thik", or similar short acknowledgements — just reply with a quick emoji or "Great! Let me know if you need anything else." Do NOT give a new service pitch.
-8. ULTRA-CONCISE: Max 3 to 4 short bullet points. Never send walls of text.
-9. NO MARKDOWN: NEVER use hashes (#) or stars (*). Use emojis 📌✨ instead.
-10. NO REPETITION: Never repeat the same info twice.
-11. SPLIT BUBBLES: If the answer is longer than 5-6 lines, use a double line break (\\n\\n) to split into 2 bubbles max. Never more than 2 bubbles.
-12. NO CHATBOT FLUFF: Start immediately with the answer. No "Sure!", "Of course!", "Great question!" etc.
+1. CHAT MODE: The sales script is officially COMPLETE. You are now a helpful Assistant.
+2. DO NOT REPEAT SCRIPT: Never output Stage 1-14 script blocks again. 
+3. KNOWLEDGE MATCH: Search through the entire Google Sheet data provided above (Persona, Convo, FAQ, and Leads sections). You must analyze all 4 parts to ensure the correct answer.
+4. ACKNOWLEDGEMENTS: If the user just says "ok", "okk", "kk", or similar, just reply with a quick emoji or "Great! Let me know if you need anything else."
+5. ULTRA-CONCISE: Max 3 to 4 short bullet points only. 
+6. NO MARKDOWN: NEVER use hashes (#) or stars (*). Use emojis 📌✨.
+7. SPLIT BUBBLES: If the answer is longer than 5 or 6 lines, use a double line break (\\n\\n) to split it into 2 bubbles. No more than 2 bubbles.
+8. NO CHATBOT FLUFF: Start immediately with the answer.
 `;
         } else {
             systemPrompt += `
 \n\n=== CRITICAL FINAL COMMAND (MANDATORY) ===
-1. FLOW MODE: You are currently in the sales script flow.
-2. ACKNOWLEDGE BRIEFLY: Start with a 1-sentence acknowledgement of their choice. 
-3. NEXT SCRIPT: Immediately after, paste the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section above. 
-4. DO NOT HALLUCINATE: Do not sell other services or talk about "beauty space" unless it's in the script.
-5. STAGE TAG: You MUST end your message with: [STAGE: ${nextStage}]
-6. NO MARKDOWN: NEVER use hashes (#) or stars (*). Use emojis instead.
-7. ULTRA-CONCISE: Max 4-5 lines. No walls of text.
+1. INTENT CHECK: Look at the user's latest message. 
+   - If they are ASKING a question, inquiring about services, or requesting info: STAY in the current stage. DO NOT output the stage tag. Answer their question accurately using the knowledge base.
+   - If they have ANSWERED the previous question or selected an option (A, B, C, D): ADVANCE. Output a brief acknowledgment and then the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section above.
+2. STAGE TAG: Only if you decided to ADVANCE, you MUST end your message with: [STAGE: ${nextStage}]
+3. ACCURACY: When answering questions, check ALL parts of the Google Sheet provided. If they ask about services, mention "The Look" and others found in the sheet.
 `;
         }
 
@@ -343,22 +312,12 @@ export async function generateAutoResponse(
         let response = "";
         let bypassedLLM = false;
 
-        // INSTANT ACKNOWLEDGEMENT: If user says "ok/okay/okk" in Assistant Mode, don't call LLM at all
-        const isAck = /^(ok|okay|okk|okey|okeyy|kk|done|thik|thik h|thik hai|theek|acha|accha|achha|got it|cool|nice|great|perfect|alright|hmm|hm|ji|ha|haa|haan|han|good|fine|sure|sahi|samjh|samjha|noted|thanks|thankyou|thank you|dhanyawad|shukriya)$/i.test(messageText.trim());
-        if (isAck && isCaptured) {
-            response = "👍 Let me know if you need anything else!";
-            bypassedLLM = true;
-            console.log("⚡ Bypassing LLM for acknowledgement in Assistant Mode");
-        }
-
         if (nextStage === "PROMPT_CONTINUE") {
             response = `"Welcome back! Would you like to continue our previous conversation, or should we start fresh?"\n[STAGE: ${userStageData.current_stage}]`;
             bypassedLLM = true;
             console.log("⚡ Bypassing LLM for PROMPT_CONTINUE greeting");
-        } else if (!capturedStages.includes(nextStage)) {
-            // CRITICAL: If the Target Stage is a script stage (NOT captured), we ALWAYS bypass and paste the script!
-            // This prevents AI hallucinations when restarting or moving through the flow.
-            console.log(`⚡ Script Stage detected (${nextStage}) - Attempting hardcoded bypass...`);
+        } else if (!isCaptured || (capturedStages.includes(nextStage) && userStageData.current_stage !== nextStage)) {
+            // Bypass the LLM for ALL standard script stages, including terminal destinations (first entry only)!
             const lines = MASTER_SYSTEM_PROMPT.split('\n');
             let isCapturingBlock = false;
             let capturedLines = [];
@@ -447,20 +406,17 @@ export async function generateAutoResponse(
             }
         } // Close if (!bypassedLLM)
 
-        // 11. FORCE PROGRESSION (Strict Sequencing)
-        let newStage = nextStage;
+        // 11. INTENT-BASED PROGRESSION
+        let newStage = userStageData.current_stage; // Default to stay
 
-        // Ensure we don't accidentally save 'PROMPT_CONTINUE' as a DB state
-        if (newStage === "PROMPT_CONTINUE") {
-            newStage = userStageData.current_stage;
-        }
-
-        // If the LLM output its own stage tag, we can respect it IF it's valid
-        const stageMatch = response.match(/\[STAGE:\s*(.*?)\]/i);
-        if (stageMatch) {
-            const extracted = stageMatch[1].trim();
-            if (Object.keys(STAGE_MAP).includes(extracted) || capturedStages.includes(extracted)) {
-                newStage = extracted;
+        if (!isCaptured) {
+            // In Flow Mode, we trust the AI to output the [STAGE: XXX] tag ONLY when ready to advance
+            const stageMatch = response.match(/\[STAGE:\s*(.*?)\]/i);
+            if (stageMatch) {
+                newStage = stageMatch[1].trim();
+                console.log(`🎯 AI decided to ADVANCE to: ${newStage}`);
+            } else {
+                console.log(`❓ AI decided to STAY in: ${newStage} to answer a question.`);
             }
         }
 
@@ -480,12 +436,10 @@ export async function generateAutoResponse(
             newInfo[match[1].trim()] = match[2].trim();
         }
 
-        // Clean meta-tags AND markdown from response STERNLY
+        // Clean meta-tags from response STERNLY
         response = response
             .replace(/\[STAGE:\s*.*?\]/gi, "")
             .replace(/\[INFO:\s*.*?=.*?\]/gi, "")
-            .replace(/\*+/g, "")  // Strip all markdown stars
-            .replace(/#+\s*/g, "")  // Strip all markdown hashes
             .trim();
 
         console.log(`💾 Updating DB: fromNumber=${normFrom}, newStage=${newStage}`);
