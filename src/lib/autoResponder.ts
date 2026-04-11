@@ -504,7 +504,7 @@ export async function generateAutoResponse(
 
         // 13. Mark original message as responded AND background extract lead data
         // 13. Mark original message as responded AND background extract lead data
-        const extractionKey = mapping.gemini_api_key || process.env.GEMINI_API_KEY;
+        const extractionKey = phoneMapping.gemini_api_key || process.env.GEMINI_API_KEY;
         const [extractedData] = await Promise.all([
             extractLeadData(messageText, extractionKey || ""),
             supabase
