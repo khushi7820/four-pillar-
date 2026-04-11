@@ -226,17 +226,25 @@ export async function generateAutoResponse(
             console.log("🆕 Start fresh detected. WIPING history for this prompt.");
             nextStage = "DISCOVERY";
             // Important: We don't slice the actual DB history, but we slice what we send to the LLM
-        } else if (isContinue) {
-            console.log("🔄 Continue detected");
-            nextStage = userStageData.current_stage;
+        } else {
+            console.log("🔄 Message received - advancing stage.");
+            // nextStage was already calculated by STAGE_MAP lookup on line 179
         }
 
         console.log(`➡️ Calculated Next Stage: ${nextStage} (Current: ${userStageData.current_stage})`);
 
         // 9. Build the System Prompt
-        let systemPrompt = `ROLE: You are the Official Script Player.`;
+        const isCaptured = capturedStages.includes(nextStage) || capturedStages.includes(userStageData.current_stage);
+
+        let systemPrompt = `ROLE: You are the Official Assistant for Four Pillars.`;
         
-        systemPrompt += MASTER_SYSTEM_PROMPT;
+        // ONLY show the script if we are NOT in Assistant Mode
+        if (!isCaptured) {
+            systemPrompt += MASTER_SYSTEM_PROMPT;
+        } else {
+            systemPrompt += `\n\n=== ASSISTANT MODE ACTIVE ===\nYour goal is to answer questions using the knowledge base below.\n`;
+        }
+
         systemPrompt += customContent;
 
         // Add context & FAQ info EARLY so they are "above" the final commands
@@ -545,7 +553,7 @@ export async function generateAutoResponse(
 async function extractLeadData(message: string, geminiKey: string): Promise<any> {
     try {
         const genAI = new GoogleGenerativeAI(geminiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Use stable version name
 
         const prompt = `
         TASK: Extract user data from the following WhatsApp message.
