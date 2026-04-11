@@ -38,7 +38,7 @@ export async function generateAutoResponse(
 ): Promise<AutoResponseResult> {
     const normFrom = normalizePhone(fromNumber);
     const normTo = normalizePhone(toNumber);
-    const capturedStages = ["HOT_LEAD", "WARM_LEAD", "INTENT_CAPTURE"];
+    const capturedStages = ["HOT_LEAD", "WARM_LEAD", "INTENT_CAPTURE", "ASSISTANT_CHAT"];
     try {
         console.log(`--- Starting Fast Auto-Response for ${normTo} (From: ${normFrom}) ---`);
         const startTime = Date.now();
