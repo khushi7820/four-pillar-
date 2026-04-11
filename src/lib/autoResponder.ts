@@ -509,10 +509,11 @@ export async function generateAutoResponse(
         }
 
         // 13. Mark original message as responded AND background extract lead data
-        // 13. Mark original message as responded AND background extract lead data
-        const extractionKey = phoneMapping.gemini_api_key || process.env.GEMINI_API_KEY;
+        const gKey = phoneMapping.gemini_api_key || process.env.GEMINI_API_KEY;
+        const grKey = phoneMapping.groq_api_key || process.env.GROQ_API_KEY;
+
         const [extractedData] = await Promise.all([
-            extractLeadData(messageText, extractionKey || ""),
+            extractLeadData(messageText, gKey || "", grKey || ""),
             supabase
                 .from("whatsapp_messages")
                 .update({
@@ -548,12 +549,8 @@ export async function generateAutoResponse(
 /**
  * Background extraction of lead data (name, business, etc.)
  */
-async function extractLeadData(message: string, geminiKey: string): Promise<any> {
-    try {
-        const genAI = new GoogleGenerativeAI(geminiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Use stable version name
-
-        const prompt = `
+async function extractLeadData(message: string, geminiKey?: string, groqKey?: string): Promise<any> {
+    const prompt = `
         TASK: Extract user data from the following WhatsApp message.
         MESSAGE: "${message}"
 
@@ -568,14 +565,38 @@ async function extractLeadData(message: string, geminiKey: string): Promise<any>
         JSON ONLY. No explanation.
         `;
 
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        return jsonMatch ? JSON.parse(jsonMatch[0]) : {};
-    } catch (e) {
-        console.error("Extraction failed:", e);
-        return {};
+    // 1. Try Gemini first
+    if (geminiKey) {
+        try {
+            const genAI = new GoogleGenerativeAI(geminiKey);
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            const result = await model.generateContent(prompt);
+            const text = result.response.text();
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            if (jsonMatch) return JSON.parse(jsonMatch[0]);
+        } catch (e) {
+            console.warn("Gemini extraction failed, trying Groq fallback...");
+        }
     }
+
+    // 2. Try Groq 8B as fallback
+    if (groqKey) {
+        try {
+            const groq = new Groq({ apiKey: groqKey });
+            const completion = await groq.chat.completions.create({
+                messages: [{ role: "user", content: prompt }],
+                model: "llama-3.1-8b-instant",
+                temperature: 0,
+            });
+            const text = completion.choices[0]?.message?.content || "";
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            if (jsonMatch) return JSON.parse(jsonMatch[0]);
+        } catch (e) {
+            console.error("Groq extraction failed:", e);
+        }
+    }
+
+    return {};
 }
 
 /**
