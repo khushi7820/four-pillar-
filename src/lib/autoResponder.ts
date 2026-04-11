@@ -109,7 +109,7 @@ export async function generateAutoResponse(
         const matches = await retrieveRelevantChunksForPhoneNumber(
             queryEmbedding,
             toNumber,
-            5
+            12
         );
 
         const contextText = matches.length > 0
@@ -228,16 +228,8 @@ export async function generateAutoResponse(
             nextStage = "DISCOVERY";
             // Important: We don't slice the actual DB history, but we slice what we send to the LLM
         } else {
-            // Smart check: If user asks a question, DO NOT advance
-            const isQuestion = messageText.includes("?") || /(what|how|why|who|where|when|tell|show|provide|ask|info|help|know|detail|service|broucher|price|about|blue|print)/i.test(messageText);
-
-            if (isQuestion) {
-                console.log("❓ Question detected - staying in current stage to answer.");
-                nextStage = userStageData.current_stage;
-            } else {
-                console.log("🔄 Choice/Answer received - advancing stage.");
-                // nextStage was already calculated by STAGE_MAP lookup on line 179
-            }
+            // WE NOW LET THE AI DECIDE IF IT SHOULD ADVANCE BASED ON INTENT
+            console.log("🤖 Entering Hybrid Flow Mode - AI will decide to advance or answer.");
         }
 
         console.log(`➡️ Calculated Next Stage: ${nextStage} (Current: ${userStageData.current_stage})`);
@@ -288,11 +280,11 @@ export async function generateAutoResponse(
         } else {
             systemPrompt += `
 \n\n=== CRITICAL FINAL COMMAND (MANDATORY) ===
-1. FLOW MODE: Your goal is to move the user through the sales script.
-2. ACKNOWLEDGE CHOICE: Start your message with a very brief (max 1 short sentence) confirmation of their previous answer/choice. Use their name if known. 
-3. NEXT SCRIPT: Immediately after the acknowledgement, paste the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section above. 
-4. NO EXTRA CHAT: Do NOT explain the choice or add your own tips yet.
-5. STAGE TAG: You MUST end your message with this exact tag: [STAGE: ${nextStage}]
+1. INTENT CHECK: Look at the user's latest message. 
+   - If they are ASKING a question, inquiring about services, or requesting info: STAY in the current stage. DO NOT output the stage tag. Answer their question accurately using the knowledge base.
+   - If they have ANSWERED the previous question or selected an option (A, B, C, D): ADVANCE. Output a brief acknowledgment and then the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section above.
+2. STAGE TAG: Only if you decided to ADVANCE, you MUST end your message with: [STAGE: ${nextStage}]
+3. ACCURACY: When answering questions, check ALL parts of the Google Sheet provided. If they ask about services, mention "The Look" and others found in the sheet.
 `;
         }
 
@@ -414,13 +406,18 @@ export async function generateAutoResponse(
             }
         } // Close if (!bypassedLLM)
 
-        // 11. FORCE PROGRESSION (Absolute Lockdown)
-        // We no longer trust the AI's regex tags. The calculated nextStage is ABSOLUTE.
-        let newStage = nextStage;
+        // 11. INTENT-BASED PROGRESSION
+        let newStage = userStageData.current_stage; // Default to stay
 
-        // Ensure we don't accidentally save 'PROMPT_CONTINUE' as a DB state (we keep their old state instead)
-        if (newStage === "PROMPT_CONTINUE") {
-            newStage = userStageData.current_stage;
+        if (!isCaptured) {
+            // In Flow Mode, we trust the AI to output the [STAGE: XXX] tag ONLY when ready to advance
+            const stageMatch = response.match(/\[STAGE:\s*(.*?)\]/i);
+            if (stageMatch) {
+                newStage = stageMatch[1].trim();
+                console.log(`🎯 AI decided to ADVANCE to: ${newStage}`);
+            } else {
+                console.log(`❓ AI decided to STAY in: ${newStage} to answer a question.`);
+            }
         }
 
         // Handle Budget Branching Manually for Safety
