@@ -275,8 +275,9 @@ export async function generateAutoResponse(
 4. ACKNOWLEDGEMENTS: If the user just says "ok", "okk", "kk", or similar, just reply with a quick emoji or "Great! Let me know if you need anything else."
 5. ULTRA-CONCISE: Max 3 to 4 short bullet points only. 
 6. NO MARKDOWN: NEVER use hashes (#) or stars (*). Use emojis 📌✨.
-7. SPLIT BUBBLES: If the answer is longer than 5 or 6 lines, use a double line break (\\n\\n) to split it into 2 bubbles. No more than 2 bubbles.
+7. SPLIT BUBBLES: If the answer is longer than 5 or 6 lines, use a double line break (\n\n) to split it into 2 bubbles. No more than 2 bubbles.
 8. NO CHATBOT FLUFF: Start immediately with the answer.
+9. EXACT FORMATTING: When retrieving answers from the sheet (e.g., Services, Prices), use the EXACT formatting, bullet points, and wording from the document. Do not rewrite.
 `;
         } else {
             systemPrompt += `
@@ -285,7 +286,7 @@ export async function generateAutoResponse(
    - If they are ASKING a question, inquiring about services, or requesting info: STAY in the current stage. DO NOT output the stage tag. Answer their question accurately using the knowledge base.
    - If they have ANSWERED the previous question or selected an option (A, B, C, D): ADVANCE. Output a brief acknowledgment and then the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section above.
 2. STAGE TAG: Only if you decided to ADVANCE, you MUST end your message with: [STAGE: ${nextStage}]
-3. ACCURACY: When answering questions, check ALL parts of the Google Sheet provided. If they ask about services, mention "The Look" and others found in the sheet.
+3. ACCURACY & FORMATTING: When answering questions, check ALL parts of the Google Sheet provided. If they ask about services, mention "The Look" and others found in the sheet. You MUST use the EXACT format, bullet points, and wording from the sheet. Do not rewrite it.
 `;
         }
 
