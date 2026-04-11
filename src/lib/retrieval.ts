@@ -126,7 +126,7 @@ export async function retrieveChunksByKeyword(
 
     // Fetch all chunks for this phone number (no vector needed)
     const { data, error } = await supabase
-        .from("document_chunks")
+        .from("chunks")
         .select("id, content")
         .eq("phone_number", phoneNumber)
         .limit(300);

@@ -163,10 +163,9 @@ export async function generateAutoResponse(
         console.log(`Pre-processing took ${Date.now() - startTime}ms (Gap: ${timeGapDays.toFixed(1)} days)`);
 
         // 7. Get any custom prompt from the sheet
+        // IMPORTANT: Only use this in Assistant Mode (captured). During the flow, MASTER_SYSTEM_PROMPT handles everything.
+        // The DB system_prompt ("I'm a media expert...") was overriding the sales flow — now it's restricted to assistant mode only.
         let customContent = "";
-        if (customSystemPrompt) {
-            customContent = `\n\n=== BUSINESS PROFILE & CUSTOM SCRIPT ===\n${customSystemPrompt}\n`;
-        }
 
         const STAGE_MAP: Record<string, string> = {
             "DISCOVERY": "SELL",
@@ -265,11 +264,14 @@ export async function generateAutoResponse(
         // ONLY show the script if we are NOT in Assistant Mode
         if (!isCaptured) {
             systemPrompt += MASTER_SYSTEM_PROMPT;
+            // During flow: DO NOT inject DB custom prompt — it overrides the sales script
         } else {
             systemPrompt += `\n\n=== ASSISTANT MODE ACTIVE ===\nYour goal is to answer questions using the knowledge base below.\n`;
+            // In assistant mode: optionally use DB persona if set
+            if (customSystemPrompt) {
+                systemPrompt += `\n\n=== BUSINESS CONTEXT ===\n${customSystemPrompt}\n`;
+            }
         }
-
-        systemPrompt += customContent;
 
         // Add context & FAQ info EARLY so they are "above" the final commands
         systemPrompt += `\n\n=== CONTEXT ===\n`;
