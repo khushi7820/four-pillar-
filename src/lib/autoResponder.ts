@@ -62,7 +62,10 @@ export async function generateAutoResponse(
         // 2. Parallelize remaining data fetching using custom keys if available
         const [fileIds, queryEmbedding, historyResult, userStageData] = await Promise.all([
             getFilesForPhoneNumber(toNumber),
-            embedText(messageText, 3, phoneMapping.mistral_api_key),
+            embedText(messageText, 3, phoneMapping.mistral_api_key).catch(err => {
+                console.warn("⚠️ Embedding generation failed (Mistral down?), continuing without context...", err.message);
+                return null;
+            }),
             supabase
                 .from("whatsapp_messages")
                 .select("content_text, event_type, from_number, to_number, received_at")
@@ -98,19 +101,17 @@ export async function generateAutoResponse(
             };
         }
 
-        if (!queryEmbedding) {
-            return {
-                success: false,
-                error: "Failed to generate embedding",
-            };
-        }
-
         // 2. Vector Search (Depends on embedding)
-        const matches = await retrieveRelevantChunksForPhoneNumber(
-            queryEmbedding,
-            toNumber,
-            12
-        );
+        let matches: any[] = [];
+        if (queryEmbedding) {
+            matches = await retrieveRelevantChunksForPhoneNumber(
+                queryEmbedding,
+                toNumber,
+                12
+            );
+        } else {
+            console.log("⚠️ Skipping vector search due to missing embedding.");
+        }
 
         const contextText = matches.length > 0
             ? matches.map((m) => m.chunk).join("\n\n")
