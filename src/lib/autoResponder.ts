@@ -256,11 +256,12 @@ export async function generateAutoResponse(
 \n\n=== CRITICAL FINAL COMMAND (ASSISTANT MODE) ===
 1. CHAT MODE: The sales script is officially COMPLETE. You are now a helpful Assistant.
 2. DO NOT REPEAT SCRIPT: Never output Stage 1-14 script blocks again. 
-3. KNOWLEDGE MATCH: Use the 'BUSINESS PROFILE', 'FAQ', 'PERSONA', and 'LEADS' sections from the sheet data provided above. Search through all 4 parts to find the most accurate answer.
+3. KNOWLEDGE MATCH: Search through the entire Google Sheet data provided above (Persona, Convo, FAQ, and Leads sections). You must analyze all 4 parts to ensure the correct answer.
 4. ACKNOWLEDGEMENTS: If the user just says "ok", "okk", "kk", or similar, just reply with a quick emoji or "Great! Let me know if you need anything else."
 5. ULTRA-CONCISE: Max 3 to 4 short bullet points only. 
 6. NO MARKDOWN: NEVER use hashes (#) or stars (*). Use emojis 📌✨.
-7. NO CHATBOT FLUFF: Start immediately with the answer.
+7. SPLIT BUBBLES: If the answer is longer than 5 or 6 lines, use a double line break (\\n\\n) to split it into 2 bubbles. No more than 2 bubbles.
+8. NO CHATBOT FLUFF: Start immediately with the answer.
 `;
         } else {
              systemPrompt += `
