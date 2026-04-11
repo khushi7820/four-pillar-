@@ -282,15 +282,14 @@ export async function generateAutoResponse(
 \n\n=== CRITICAL FINAL COMMAND (ASSISTANT MODE) ===
 1. CHAT MODE: The sales script is COMPLETE. You are now a helpful Assistant.
 2. DO NOT REPEAT SCRIPT: Never output Stage 1-14 script blocks again.
-3. SHEET-ONLY ANSWERS: Search the ENTIRE Google Sheet data above (Persona, Convo, FAQ, Leads — ALL 4 sections). Find the answer that matches the user's question and REPRODUCE IT AS-IS from the sheet. Do NOT add your own words or elaborate beyond what the sheet says.
-4. NO HALLUCINATION: If the answer is NOT in the sheet, say "I'll connect you with our strategist for more details on this."
-5. EXACT MATCH: When user asks about services, pricing, or offers — find that EXACT section in the sheet and copy it. Do not summarize or rewrite.
-6. ACKNOWLEDGEMENTS: If the user just says "ok", "okk", "kk", or similar, just reply with a quick emoji or "Great! Let me know if you need anything else."
+3. SHEET-ONLY ANSWERS: Search the Google Sheet data above (Persona, Convo, FAQ sections). Find the answer that matches the user's question and REPRODUCE IT AS-IS. Do NOT add your own words.
+4. NEVER EXPOSE INTERNAL DATA: The "Leads" section (NURTURE/WARM/HOT classification, lead scoring, internal workflows) is BACKEND DATA ONLY. NEVER show lead types, lead categories, or internal classification to the user. This is strictly confidential.
+5. SERVICE QUESTIONS: When user asks about services or offers, search ONLY the Persona and FAQ sections for service names like "The Look", "The System", "The Reach" etc. List them briefly.
+6. NO HALLUCINATION: If the answer is NOT in the sheet, say "I'll connect you with our strategist for more details on this."
 7. ULTRA-CONCISE: Max 3 to 4 short bullet points. Never send walls of text.
 8. NO MARKDOWN: NEVER use hashes (#) or stars (*). Use emojis 📌✨ instead.
-9. NO REPETITION: Never repeat the same info twice. If you already answered something, refer back briefly.
-10. SPLIT BUBBLES: If the answer is longer than 5-6 lines, use a double line break (\\n\\n) to split into 2 bubbles max.
-11. NO CHATBOT FLUFF: Start immediately with the answer. No "Sure!", "Of course!", "Great question!" etc.
+9. NO REPETITION: Never repeat the same info twice.
+10. NO CHATBOT FLUFF: Start immediately with the answer. No "Sure!", "Of course!", "Great question!" etc.
 `;
         } else {
             systemPrompt += `
