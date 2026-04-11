@@ -170,9 +170,9 @@ export async function generateAutoResponse(
             "PROMPT_CONTINUE": "DISCOVERY" 
         };
 
-        const isGreeting = /^(hey|hi|hello|menu|hy|hyy|hii|hiii|heyy|heyyy|namaste|kem cho|kese ho|kaise ho)$/i.test(messageText.trim());
+        const isGreeting = /^(hey|hi|hello|menu|hy|hyy|hii|hiii|heyy|heyyy|namaste|kem cho|kese ho|kaise ho|hay|hayy|hola|salaam|helow|heloww)$/i.test(messageText.trim());
         const isStartFresh = /^(start|start fresh|fresh one|fresh|new topic|new|restart|start new|start over|start again)$/i.test(messageText.trim());
-        const isContinue = /^(continue|same|old|yes|y)$/i.test(messageText.trim());
+        const isContinue = /^(continue|same|old|yes|y|ok|okay|okk|kk|okey|okeyy|yup|yeah|han|thik|theek|done|thik h|thik hai)$/i.test(messageText.trim());
 
         // Link is no longer blacklisted
 
@@ -254,12 +254,13 @@ export async function generateAutoResponse(
         if (isCaptured) {
             systemPrompt += `
 \n\n=== CRITICAL FINAL COMMAND (ASSISTANT MODE) ===
-1. KNOWLEDGE MATCH: Use the 'BUSINESS PROFILE' & 'FAQ' from 'ADDITIONAL INFO' and 'CUSTOM SCRIPT' sections provided above. Do not hallucinate outside info.
-2. ULTRA-CONCISE: Your entire response MUST NOT exceed 3 to 4 lines or bullet points. DO NOT print long paragraphs.
-3. NO PARAGRAPHS: Give answers strictly in short points. 
-4. NO MARKDOWN: NEVER use hashes (#) or stars/asterisks (*). Do not use bold/italic markdown.
-5. SPLIT BUBBLES: ONLY IF the answer absolutely requires full long content, use a double line break (\\n\\n) to split it into 2 chat bubbles. Do NOT arbitrarily split short answers into bubbles.
-6. FORMAT: Use emojis 📌✨ to make it look premium. Start immediately with the answer.
+1. CHAT MODE: The sales script is officially COMPLETE. You are now a helpful Assistant.
+2. DO NOT REPEAT SCRIPT: Never output Stage 1-14 script blocks again. 
+3. KNOWLEDGE MATCH: Use the 'BUSINESS PROFILE', 'FAQ', 'PERSONA', and 'LEADS' sections from the sheet data provided above. Search through all 4 parts to find the most accurate answer.
+4. ACKNOWLEDGEMENTS: If the user just says "ok", "okk", "kk", or similar, just reply with a quick emoji or "Great! Let me know if you need anything else."
+5. ULTRA-CONCISE: Max 3 to 4 short bullet points only. 
+6. NO MARKDOWN: NEVER use hashes (#) or stars (*). Use emojis 📌✨.
+7. NO CHATBOT FLUFF: Start immediately with the answer.
 `;
         } else {
              systemPrompt += `
