@@ -38,6 +38,7 @@ export async function generateAutoResponse(
 ): Promise<AutoResponseResult> {
     const normFrom = normalizePhone(fromNumber);
     const normTo = normalizePhone(toNumber);
+    const capturedStages = ["HOT_LEAD", "WARM_LEAD", "INTENT_CAPTURE"];
     try {
         console.log(`--- Starting Fast Auto-Response for ${normTo} (From: ${normFrom}) ---`);
         const startTime = Date.now();
@@ -179,7 +180,6 @@ export async function generateAutoResponse(
         let nextStage = STAGE_MAP[userStageData.current_stage] || userStageData.current_stage;
 
         // Break the loop if already in a captured/terminal stage
-        const capturedStages = ["HOT_LEAD", "WARM_LEAD", "INTENT_CAPTURE"];
         if (capturedStages.includes(userStageData.current_stage) && nextStage === userStageData.current_stage) {
             nextStage = "ASSISTANT_CHAT";
         }
