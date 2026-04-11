@@ -327,8 +327,10 @@ export async function generateAutoResponse(
             response = `"Welcome back! Would you like to continue our previous conversation, or should we start fresh?"\n[STAGE: ${userStageData.current_stage}]`;
             bypassedLLM = true;
             console.log("⚡ Bypassing LLM for PROMPT_CONTINUE greeting");
-        } else if (!isCaptured || (capturedStages.includes(nextStage) && userStageData.current_stage !== nextStage)) {
-            // Bypass the LLM for ALL standard script stages, including terminal destinations (first entry only)!
+        } else if (!capturedStages.includes(nextStage)) {
+            // CRITICAL: If the Target Stage is a script stage (NOT captured), we ALWAYS bypass and paste the script!
+            // This prevents AI hallucinations when restarting or moving through the flow.
+            console.log(`⚡ Script Stage detected (${nextStage}) - Attempting hardcoded bypass...`);
             const lines = MASTER_SYSTEM_PROMPT.split('\n');
             let isCapturingBlock = false;
             let capturedLines = [];
