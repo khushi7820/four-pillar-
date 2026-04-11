@@ -228,8 +228,18 @@ export async function generateAutoResponse(
             nextStage = "DISCOVERY";
             // Important: We don't slice the actual DB history, but we slice what we send to the LLM
         } else {
-            // WE NOW LET THE AI DECIDE IF IT SHOULD ADVANCE BASED ON INTENT
-            console.log("🤖 Entering Hybrid Flow Mode - AI will decide to advance or answer.");
+            // Smart check: If user asks a question, DO NOT advance
+            // If they pick a choice (matches A., B., C., D. or started with a dot), always advance.
+            const isChoice = /^\.?\s*[A-D]/i.test(messageText.trim()) || messageText.length < 5;
+            const isQuestion = !isChoice && (messageText.includes("?") || /(what|how|why|who|where|when|tell|show|provide|ask|info|help|know|detail|service|broucher|price|about|blue|print|details)/i.test(messageText));
+            
+            if (isQuestion) {
+                console.log("❓ Question detected - staying in current stage to answer.");
+                nextStage = userStageData.current_stage;
+            } else {
+                console.log("🔄 Choice/Answer received - forces advancement to next stage.");
+                // nextStage was already calculated by STAGE_MAP lookup
+            }
         }
 
         console.log(`➡️ Calculated Next Stage: ${nextStage} (Current: ${userStageData.current_stage})`);
@@ -280,11 +290,11 @@ export async function generateAutoResponse(
         } else {
             systemPrompt += `
 \n\n=== CRITICAL FINAL COMMAND (MANDATORY) ===
-1. INTENT CHECK: Look at the user's latest message. 
-   - If they are ASKING a question, inquiring about services, or requesting info: STAY in the current stage. DO NOT output the stage tag. Answer their question accurately using the knowledge base.
-   - If they have ANSWERED the previous question or selected an option (A, B, C, D): ADVANCE. Output a brief acknowledgment and then the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section above.
-2. STAGE TAG: Only if you decided to ADVANCE, you MUST end your message with: [STAGE: ${nextStage}]
-3. ACCURACY: When answering questions, check ALL parts of the Google Sheet provided. If they ask about services, mention "The Look" and others found in the sheet.
+1. FLOW MODE: You are currently in the sales script flow.
+2. ACKNOWLEDGE BRIEFLY: Start with a 1-sentence acknowledgement of their choice. 
+3. NEXT SCRIPT: Immediately after, paste the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section above. 
+4. DO NOT HALLUCINATE: Do not sell other services or talk about "beauty space" unless it's in the script.
+5. STAGE TAG: You MUST end your message with: [STAGE: ${nextStage}]
 `;
         }
 
@@ -406,17 +416,20 @@ export async function generateAutoResponse(
             }
         } // Close if (!bypassedLLM)
 
-        // 11. INTENT-BASED PROGRESSION
-        let newStage = userStageData.current_stage; // Default to stay
+        // 11. FORCE PROGRESSION (Strict Sequencing)
+        let newStage = nextStage;
 
-        if (!isCaptured) {
-            // In Flow Mode, we trust the AI to output the [STAGE: XXX] tag ONLY when ready to advance
-            const stageMatch = response.match(/\[STAGE:\s*(.*?)\]/i);
-            if (stageMatch) {
-                newStage = stageMatch[1].trim();
-                console.log(`🎯 AI decided to ADVANCE to: ${newStage}`);
-            } else {
-                console.log(`❓ AI decided to STAY in: ${newStage} to answer a question.`);
+        // Ensure we don't accidentally save 'PROMPT_CONTINUE' as a DB state
+        if (newStage === "PROMPT_CONTINUE") {
+            newStage = userStageData.current_stage;
+        }
+
+        // If the LLM output its own stage tag, we can respect it IF it's valid
+        const stageMatch = response.match(/\[STAGE:\s*(.*?)\]/i);
+        if (stageMatch) {
+            const extracted = stageMatch[1].trim();
+            if (Object.keys(STAGE_MAP).includes(extracted) || capturedStages.includes(extracted)) {
+                newStage = extracted;
             }
         }
 
