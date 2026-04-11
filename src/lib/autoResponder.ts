@@ -230,7 +230,7 @@ export async function generateAutoResponse(
         } else {
             // Smart check: If user asks a question, DO NOT advance
             const isQuestion = messageText.includes("?") || /^(what|how|why|who|where|when|tell|show|provide|ask|info|help|know|detail)/i.test(messageText.trim());
-            
+
             if (isQuestion) {
                 console.log("❓ Question detected - staying in current stage to answer.");
                 nextStage = userStageData.current_stage;
@@ -288,10 +288,10 @@ export async function generateAutoResponse(
         } else {
             systemPrompt += `
 \n\n=== CRITICAL FINAL COMMAND (MANDATORY) ===
-1. ACT AS A DUMB COPY-PASTE MACHINE. You are NOT an assistant.
-2. YOUR ONLY JOB is to output the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section above. 
-3. DO NOT CHAT. DO NOT process the user's input. DO NOT explain their choice. DO NOT say "You chose..." or "Let's break it down."
-4. Start your message IMMEDIATELY with the script text. NOTHING ELSE.
+1. FLOW MODE: Your goal is to move the user through the sales script.
+2. ACKNOWLEDGE CHOICE: Start your message with a very brief (max 1 short sentence) confirmation of their previous answer/choice. Use their name if known. 
+3. NEXT SCRIPT: Immediately after the acknowledgement, paste the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section above. 
+4. NO EXTRA CHAT: Do NOT explain the choice or add your own tips yet.
 5. STAGE TAG: You MUST end your message with this exact tag: [STAGE: ${nextStage}]
 `;
         }
