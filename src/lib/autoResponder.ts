@@ -172,11 +172,17 @@ export async function generateAutoResponse(
 
         const isGreeting = /^(hey|hi|hello|menu|hy|hyy|hii|hiii|heyy|heyyy|namaste|kem cho|kese ho|kaise ho|hay|hayy|hola|salaam|helow|heloww)$/i.test(messageText.trim());
         const isStartFresh = /^(start|start fresh|fresh one|fresh|new topic|new|restart|start new|start over|start again)$/i.test(messageText.trim());
-        const isContinue = /^(continue|same|old|yes|y|ok|okay|okk|kk|okey|okeyy|yup|yeah|han|thik|theek|done|thik h|thik hai)$/i.test(messageText.trim());
+        const isContinue = /^(continue|same|old|yes|y|ok|okay|okk|kk|okey|okeyy|yup|yeah|han|thik|theek|done|thik h|thik hai|yess|yep|agree|confirm|right)$/i.test(messageText.trim());
 
         // Link is no longer blacklisted
 
         let nextStage = STAGE_MAP[userStageData.current_stage] || userStageData.current_stage;
+
+        // Break the loop if already in a captured/terminal stage
+        const capturedStages = ["HOT_LEAD", "WARM_LEAD", "INTENT_CAPTURE"];
+        if (capturedStages.includes(userStageData.current_stage) && nextStage === userStageData.current_stage) {
+            nextStage = "ASSISTANT_CHAT";
+        }
 
         // Custom Budget Branching Logic (Before any bypasses)
         if (userStageData.current_stage === "BUDGET") {
@@ -238,6 +244,8 @@ export async function generateAutoResponse(
         systemPrompt += `- Detected Language: ${detectedLanguage}\n`;
         systemPrompt += `- Current Stage: ${isStartFresh ? "DISCOVERY" : userStageData.current_stage}\n`;
         systemPrompt += `- Target Stage: ${nextStage}\n`;
+        systemPrompt += `- User Name: ${userStageData.collected_info?.name || "Unknown"}\n`;
+        systemPrompt += `- Already Collected Data: ${JSON.stringify(userStageData.collected_info || {}, null, 2)}\n`;
         systemPrompt += `\n\n=== ADDITIONAL INFO (For specific questions only) ===\n${contextText || "No additional info."}\n`;
 
         if (nextStage === "PROMPT_CONTINUE") {
@@ -248,7 +256,6 @@ export async function generateAutoResponse(
             systemPrompt += `[STAGE: ${userStageData.current_stage}]\n`; // Retain the real stage secretly
         }
 
-        const capturedStages = ["HOT_LEAD", "WARM_LEAD", "INTENT_CAPTURE"];
         const isCaptured = capturedStages.includes(nextStage) || capturedStages.includes(userStageData.current_stage);
 
         if (isCaptured) {
@@ -302,7 +309,7 @@ export async function generateAutoResponse(
             response = `"Welcome back! Would you like to continue our previous conversation, or should we start fresh?"\n[STAGE: ${userStageData.current_stage}]`;
             bypassedLLM = true;
             console.log("⚡ Bypassing LLM for PROMPT_CONTINUE greeting");
-        } else if (!isCaptured || (capturedStages.includes(nextStage) && !capturedStages.includes(userStageData.current_stage))) {
+        } else if (!isCaptured || (capturedStages.includes(nextStage) && userStageData.current_stage !== nextStage)) {
             // Bypass the LLM for ALL standard script stages, including terminal destinations (first entry only)!
             const lines = MASTER_SYSTEM_PROMPT.split('\n');
             let isCapturingBlock = false;
@@ -495,15 +502,26 @@ export async function generateAutoResponse(
             };
         }
 
-        // 13. Mark original message as responded
-        await supabase
-            .from("whatsapp_messages")
-            .update({
-                auto_respond_sent: true,
-                is_responded: true,
-                response_sent_at: new Date().toISOString(),
-            })
-            .eq("message_id", messageId);
+        // 13. Mark original message as responded AND background extract lead data
+        // 13. Mark original message as responded AND background extract lead data
+        const extractionKey = mapping.gemini_api_key || process.env.GEMINI_API_KEY;
+        const [extractedData] = await Promise.all([
+            extractLeadData(messageText, extractionKey || ""),
+            supabase
+                .from("whatsapp_messages")
+                .update({
+                    auto_respond_sent: true,
+                    is_responded: true,
+                    response_sent_at: new Date().toISOString(),
+                })
+                .eq("message_id", messageId)
+        ]);
+
+        console.log("Extracted Lead Info:", extractedData);
+
+        // 14. Save state with extracted data
+        await updateUserConversationStage(fromNumber, toNumber, newStage, extractedData);
+        console.log(`✅ DB Update attempted`);
 
         console.log(`✅ Auto-response chunks sent successfully to ${fromNumber}`);
 
@@ -518,6 +536,39 @@ export async function generateAutoResponse(
             success: false,
             error: error instanceof Error ? error.message : "Unknown error",
         };
+    }
+}
+
+/**
+ * Background extraction of lead data (name, business, etc.)
+ */
+async function extractLeadData(message: string, geminiKey: string): Promise<any> {
+    try {
+        const genAI = new GoogleGenerativeAI(geminiKey);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+        const prompt = `
+        TASK: Extract user data from the following WhatsApp message.
+        MESSAGE: "${message}"
+
+        Return ONLY a JSON object with any of these fields if found:
+        - "name": Person's name
+        - "business_type": What they sell (A, B, C, D choice or text)
+        - "customer_type": Who they sell to (A, B, C, D choice or text)
+        - "budget": Budget level (A, B, C, D)
+        - "time": Best time to call
+        
+        If nothing found, return {}.
+        JSON ONLY. No explanation.
+        `;
+
+        const result = await model.generateContent(prompt);
+        const text = result.response.text();
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        return jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+    } catch (e) {
+        console.error("Extraction failed:", e);
+        return {};
     }
 }
 
