@@ -231,8 +231,9 @@ export async function generateAutoResponse(
         } else {
             // Smart check: If user asks a question, DO NOT advance
             // If they pick a choice (matches A., B., C., D. or started with a dot), always advance.
-            const isChoice = /^\.?\s*[A-D]/i.test(messageText.trim()) || messageText.length < 5;
-            const isQuestion = !isChoice && (messageText.includes("?") || /(what|how|why|who|where|when|tell|show|provide|ask|info|help|know|detail|service|broucher|price|about|blue|print|details)/i.test(messageText));
+            const trimmed = messageText.trim().toLowerCase();
+            const isChoice = /^\.?\s*[A-D]\.?\s/i.test(messageText.trim()) || messageText.trim().length < 5 || /^(physical|service|digital|mix|individual|consumer|business|both|nothing|have a|strong|haven|tried|active|running|build|generate|grow|full|under|starting|early|growing|established|not clearly|not right|yes|no |don't|do it|in-house)/i.test(trimmed);
+            const isQuestion = !isChoice && (messageText.includes("?") || /\b(what is|how .+work|why |who is|where |when |tell me|show me|can you|help me|explain|broucher|brochure|blue.?print|pricing|kya h|kese|kaise|batao|samjha|dikha)\b/i.test(messageText));
             
             if (isQuestion) {
                 console.log("❓ Question detected - staying in current stage to answer.");
