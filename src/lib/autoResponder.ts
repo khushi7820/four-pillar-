@@ -217,10 +217,11 @@ export async function generateAutoResponse(
         }
         if (isGreeting) {
             console.log("👋 Greeting detected");
-            if (!userStageData.first_message_sent) {
-                nextStage = "DISCOVERY";
-            } else {
+            // Rule: Only show Welcome Back if they messaged in the last 4 days
+            if (timeGapDays > 0 && timeGapDays <= 4) {
                 nextStage = "PROMPT_CONTINUE";
+            } else {
+                nextStage = "DISCOVERY";
             }
         } else if (isStartFresh) {
             console.log("🆕 Start fresh detected. WIPING history for this prompt.");
