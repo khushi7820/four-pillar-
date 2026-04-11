@@ -235,7 +235,8 @@ export async function generateAutoResponse(
         console.log(`➡️ Calculated Next Stage: ${nextStage} (Current: ${userStageData.current_stage})`);
 
         // 9. Build the System Prompt
-        const isCaptured = capturedStages.includes(nextStage) || capturedStages.includes(userStageData.current_stage);
+        // We only enter Assistant Mode when we have fully captured their intent and are moving to open chat.
+        const isCaptured = nextStage === "ASSISTANT_CHAT";
 
         let systemPrompt = `ROLE: You are the Official Assistant for Four Pillars.`;
 
@@ -418,6 +419,9 @@ export async function generateAutoResponse(
             } else {
                 console.log(`❓ AI decided to STAY in: ${newStage} to answer a question.`);
             }
+        } else {
+            // In Assistant Chat Mode, stick to ASSISTANT_CHAT
+            newStage = "ASSISTANT_CHAT";
         }
 
         // Handle Budget Branching Manually for Safety
