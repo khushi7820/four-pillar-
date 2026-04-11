@@ -229,7 +229,7 @@ export async function generateAutoResponse(
             // Important: We don't slice the actual DB history, but we slice what we send to the LLM
         } else {
             // Smart check: If user asks a question, DO NOT advance
-            const isQuestion = messageText.includes("?") || /^(what|how|why|who|where|when|tell|show|provide|ask|info|help|know|detail)/i.test(messageText.trim());
+            const isQuestion = messageText.includes("?") || /(what|how|why|who|where|when|tell|show|provide|ask|info|help|know|detail|service|broucher|price|about|blue|print)/i.test(messageText);
 
             if (isQuestion) {
                 console.log("❓ Question detected - staying in current stage to answer.");
