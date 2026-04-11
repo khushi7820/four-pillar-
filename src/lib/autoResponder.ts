@@ -143,7 +143,7 @@ export async function generateAutoResponse(
                 break;
             }
         }
-        
+
         // If the current message IS a start fresh, or we found one in history, slice accordingly
         const cleanHistoryChunks = lastFreshIndex !== -1 ? history.slice(lastFreshIndex + 1) : history;
         const finalHistory = cleanHistoryChunks.slice(-5); // Emergency limit to 5 to avoid 100k shutdown
@@ -168,7 +168,7 @@ export async function generateAutoResponse(
             "NURTURE_DIGITAL": "DISCOVERY_SESSIONS",
             "DISCOVERY_SESSIONS": "WARM_LEAD",
             "NURTURE_AUDIT": "INTENT_CAPTURE",
-            "PROMPT_CONTINUE": "DISCOVERY" 
+            "PROMPT_CONTINUE": "DISCOVERY"
         };
 
         const isGreeting = /^(hey|hi|hello|menu|hy|hyy|hii|hiii|heyy|heyyy|namaste|kem cho|kese ho|kaise ho|hay|hayy|hola|salaam|helow|heloww)$/i.test(messageText.trim());
@@ -237,7 +237,7 @@ export async function generateAutoResponse(
         const isCaptured = capturedStages.includes(nextStage) || capturedStages.includes(userStageData.current_stage);
 
         let systemPrompt = `ROLE: You are the Official Assistant for Four Pillars.`;
-        
+
         // ONLY show the script if we are NOT in Assistant Mode
         if (!isCaptured) {
             systemPrompt += MASTER_SYSTEM_PROMPT;
@@ -277,14 +277,14 @@ export async function generateAutoResponse(
 8. NO CHATBOT FLUFF: Start immediately with the answer.
 `;
         } else {
-             systemPrompt += `
+            systemPrompt += `
 \n\n=== CRITICAL FINAL COMMAND (MANDATORY) ===
 1. ACT AS A DUMB COPY-PASTE MACHINE. You are NOT an assistant.
 2. YOUR ONLY JOB is to output the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section above. 
 3. DO NOT CHAT. DO NOT process the user's input. DO NOT explain their choice. DO NOT say "You chose..." or "Let's break it down."
 4. Start your message IMMEDIATELY with the script text. NOTHING ELSE.
 5. STAGE TAG: You MUST end your message with this exact tag: [STAGE: ${nextStage}]
-`;           
+`;
         }
 
         if (isStartFresh) {
@@ -320,7 +320,7 @@ export async function generateAutoResponse(
             const lines = MASTER_SYSTEM_PROMPT.split('\n');
             let isCapturingBlock = false;
             let capturedLines = [];
-            
+
             for (const line of lines) {
                 if (line.trim().startsWith(`${nextStage} (Stage`)) {
                     isCapturingBlock = true;
@@ -343,66 +343,66 @@ export async function generateAutoResponse(
 
         if (!bypassedLLM) {
 
-        // Use custom keys or default env vars
-        const geminiKey = phoneMapping.gemini_api_key || process.env.GEMINI_API_KEY;
-        const groqKey = phoneMapping.groq_api_key || process.env.GROQ_API_KEY;
+            // Use custom keys or default env vars
+            const geminiKey = phoneMapping.gemini_api_key || process.env.GEMINI_API_KEY;
+            const groqKey = phoneMapping.groq_api_key || process.env.GROQ_API_KEY;
 
-        if (groqKey) {
-            const keySource = phoneMapping.groq_api_key ? "DATABASE" : "ENV_VAR";
-            console.log(`🔑 Groq Key Source: ${keySource} | ID: ...${groqKey.slice(-4)}`);
-        } else {
-            console.warn("⚠️ No Groq API key found!");
-        }
+            if (groqKey) {
+                const keySource = phoneMapping.groq_api_key ? "DATABASE" : "ENV_VAR";
+                console.log(`🔑 Groq Key Source: ${keySource} | ID: ...${groqKey.slice(-4)}`);
+            } else {
+                console.warn("⚠️ No Groq API key found!");
+            }
 
-        async function tryGroq(model: "llama-3.3-70b-versatile" | "llama-3.1-8b-instant") {
-            if (!groqKey) throw new Error("Groq API key not configured");
-            console.log(`Attempting Groq ${model}...`);
-            const localGroq = new Groq({ apiKey: groqKey });
-            const completion = await localGroq.chat.completions.create({
-                model: model,
-                messages,
-                temperature: 0.7,
-                max_tokens: 1200,
-            });
-            return completion.choices[0].message.content || "";
-        }
+            async function tryGroq(model: "llama-3.3-70b-versatile" | "llama-3.1-8b-instant") {
+                if (!groqKey) throw new Error("Groq API key not configured");
+                console.log(`Attempting Groq ${model}...`);
+                const localGroq = new Groq({ apiKey: groqKey });
+                const completion = await localGroq.chat.completions.create({
+                    model: model,
+                    messages,
+                    temperature: 0.7,
+                    max_tokens: 1200,
+                });
+                return completion.choices[0].message.content || "";
+            }
 
-        try {
-            // Priority 1: Groq 70B (Reliable & Intelligent for Strict Instructions)
-            response = await tryGroq("llama-3.3-70b-versatile");
-            console.log(`Groq 70B success (Primary) in ${Date.now() - attemptStartTime}ms`);
-        } catch (groq70Error: any) {
-            console.warn("Groq 70B failed, trying Groq 8B...", groq70Error.message);
             try {
-                // Priority 2: Groq 8B (Fallback)
-                attemptStartTime = Date.now();
-                response = await tryGroq("llama-3.1-8b-instant");
-                console.log(`Groq 8B success (Fallback) in ${Date.now() - attemptStartTime}ms`);
-            } catch (groq8Error: any) {
-                console.error("Groq 8B also failed, trying Gemini...", groq8Error.message);
+                // Priority 1: Groq 70B (Reliable & Intelligent for Strict Instructions)
+                response = await tryGroq("llama-3.3-70b-versatile");
+                console.log(`Groq 70B success (Primary) in ${Date.now() - attemptStartTime}ms`);
+            } catch (groq70Error: any) {
+                console.warn("Groq 70B failed, trying Groq 8B...", groq70Error.message);
                 try {
-                    // Priority 3: Gemini 1.5 Flash (Final Fallback)
+                    // Priority 2: Groq 8B (Fallback)
                     attemptStartTime = Date.now();
-                    const localGenAI = new GoogleGenerativeAI(geminiKey || "");
-                    const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                    response = await tryGroq("llama-3.1-8b-instant");
+                    console.log(`Groq 8B success (Fallback) in ${Date.now() - attemptStartTime}ms`);
+                } catch (groq8Error: any) {
+                    console.error("Groq 8B also failed, trying Gemini...", groq8Error.message);
+                    try {
+                        // Priority 3: Gemini 1.5 Flash (Final Fallback)
+                        attemptStartTime = Date.now();
+                        const localGenAI = new GoogleGenerativeAI(geminiKey || "");
+                        const model = localGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-                    const geminiMessages = messages.map(m => ({
-                        role: m.role === "system" ? "user" : (m.role === "user" ? "user" : "model"),
-                        parts: [{ text: m.content }]
-                    }));
+                        const geminiMessages = messages.map(m => ({
+                            role: m.role === "system" ? "user" : (m.role === "user" ? "user" : "model"),
+                            parts: [{ text: m.content }]
+                        }));
 
-                    const result = await model.generateContent({
-                        contents: geminiMessages.slice(1),
-                        systemInstruction: messages[0].content,
-                    });
-                    response = result.response.text();
-                    console.log(`Gemini success in ${Date.now() - attemptStartTime}ms`);
-                } catch (geminiError: any) {
-                    console.error("All AI models failed!");
-                    return { success: false, error: "AI service unavailable" };
+                        const result = await model.generateContent({
+                            contents: geminiMessages.slice(1),
+                            systemInstruction: messages[0].content,
+                        });
+                        response = result.response.text();
+                        console.log(`Gemini success in ${Date.now() - attemptStartTime}ms`);
+                    } catch (geminiError: any) {
+                        console.error("All AI models failed!");
+                        return { success: false, error: "AI service unavailable" };
+                    }
                 }
             }
-        }
         } // Close if (!bypassedLLM)
 
         // 11. FORCE PROGRESSION (Absolute Lockdown)
