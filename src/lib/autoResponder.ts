@@ -329,6 +329,14 @@ export async function generateAutoResponse(
         let response = "";
         let bypassedLLM = false;
 
+        // INSTANT ACKNOWLEDGEMENT: If user says "ok/okay/okk" in Assistant Mode, don't call LLM at all
+        const isAck = /^(ok|okay|okk|okey|okeyy|kk|done|thik|thik h|thik hai|theek|acha|accha|achha|got it|cool|nice|great|perfect|alright|hmm|hm|ji|ha|haa|haan|han|good|fine|sure|sahi|samjh|samjha|noted|thanks|thankyou|thank you|dhanyawad|shukriya)$/i.test(messageText.trim());
+        if (isAck && isCaptured) {
+            response = "👍 Let me know if you need anything else!";
+            bypassedLLM = true;
+            console.log("⚡ Bypassing LLM for acknowledgement in Assistant Mode");
+        }
+
         if (nextStage === "PROMPT_CONTINUE") {
             response = `"Welcome back! Would you like to continue our previous conversation, or should we start fresh?"\n[STAGE: ${userStageData.current_stage}]`;
             bypassedLLM = true;
