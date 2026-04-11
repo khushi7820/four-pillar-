@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { embedText } from "./embeddings";
-import { retrieveRelevantChunksForPhoneNumber } from "./retrieval";
+import { retrieveRelevantChunksForPhoneNumber, retrieveChunksByKeyword } from "./retrieval";
 import { getFilesForPhoneNumber } from "./phoneMapping";
 import { sendWhatsAppMessage } from "./whatsappSender";
 import Groq from "groq-sdk";
@@ -111,6 +111,17 @@ export async function generateAutoResponse(
             );
         } else {
             console.log("⚠️ Skipping vector search due to missing embedding.");
+        }
+
+        // Keyword fallback if Mistral is down and we got no context
+        if (matches.length === 0) {
+            console.log("⚠️ No vector matches — using keyword fallback search...");
+            matches = await retrieveChunksByKeyword(messageText, toNumber, 10).catch(() => []);
+            if (matches.length > 0) {
+                console.log(`✅ Keyword fallback found ${matches.length} relevant chunks.`);
+            } else {
+                console.log("❌ Keyword fallback also returned nothing.");
+            }
         }
 
         const contextText = matches.length > 0

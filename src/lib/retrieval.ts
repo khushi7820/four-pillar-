@@ -113,3 +113,46 @@ export async function retrieveRelevantChunksForPhoneNumber(
 
     return sortedChunks;
 }
+/**
+ * FALLBACK: Keyword-based chunk search when embeddings are unavailable (e.g. Mistral 503)
+ * Scores chunks by keyword overlap with the query.
+ */
+export async function retrieveChunksByKeyword(
+    query: string,
+    phoneNumber: string,
+    limit = 10
+): Promise<{ id: string; chunk: string; similarity: number }[]> {
+    console.log(`🔍 Keyword fallback search for: "${query}" on phone: ${phoneNumber}`);
+
+    // Fetch all chunks for this phone number (no vector needed)
+    const { data, error } = await supabase
+        .from("document_chunks")
+        .select("id, content")
+        .eq("phone_number", phoneNumber)
+        .limit(300);
+
+    if (error || !data) {
+        console.error("Keyword search fetch error:", error);
+        return [];
+    }
+
+    // Score each chunk by keyword overlap
+    const queryWords = query.toLowerCase()
+        .replace(/[^\w\s]/g, " ")
+        .split(/\s+/)
+        .filter(w => w.length > 2); // ignore tiny words
+
+    const scored = data.map((row: any) => {
+        const content = (row.content || "").toLowerCase();
+        let score = 0;
+        for (const word of queryWords) {
+            if (content.includes(word)) score++;
+        }
+        return { id: row.id, chunk: row.content, similarity: score / (queryWords.length || 1) };
+    });
+
+    return scored
+        .filter(r => r.similarity > 0)
+        .sort((a, b) => b.similarity - a.similarity)
+        .slice(0, limit);
+}
