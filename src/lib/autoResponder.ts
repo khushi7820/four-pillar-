@@ -228,8 +228,16 @@ export async function generateAutoResponse(
             nextStage = "DISCOVERY";
             // Important: We don't slice the actual DB history, but we slice what we send to the LLM
         } else {
-            console.log("🔄 Message received - advancing stage.");
-            // nextStage was already calculated by STAGE_MAP lookup on line 179
+            // Smart check: If user asks a question, DO NOT advance
+            const isQuestion = messageText.includes("?") || /^(what|how|why|who|where|when|tell|show|provide|ask|info|help|know|detail)/i.test(messageText.trim());
+            
+            if (isQuestion) {
+                console.log("❓ Question detected - staying in current stage to answer.");
+                nextStage = userStageData.current_stage;
+            } else {
+                console.log("🔄 Choice/Answer received - advancing stage.");
+                // nextStage was already calculated by STAGE_MAP lookup on line 179
+            }
         }
 
         console.log(`➡️ Calculated Next Stage: ${nextStage} (Current: ${userStageData.current_stage})`);
