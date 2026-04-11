@@ -264,8 +264,6 @@ export async function generateAutoResponse(
             systemPrompt += `[STAGE: ${userStageData.current_stage}]\n`; // Retain the real stage secretly
         }
 
-        const isCaptured = capturedStages.includes(nextStage) || capturedStages.includes(userStageData.current_stage);
-
         if (isCaptured) {
             systemPrompt += `
 \n\n=== CRITICAL FINAL COMMAND (ASSISTANT MODE) ===
