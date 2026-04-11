@@ -297,6 +297,8 @@ export async function generateAutoResponse(
 3. NEXT SCRIPT: Immediately after, paste the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section above. 
 4. DO NOT HALLUCINATE: Do not sell other services or talk about "beauty space" unless it's in the script.
 5. STAGE TAG: You MUST end your message with: [STAGE: ${nextStage}]
+6. NO MARKDOWN: NEVER use hashes (#) or stars (*). Use emojis instead.
+7. ULTRA-CONCISE: Max 4-5 lines. No walls of text.
 `;
         }
 
@@ -453,10 +455,12 @@ export async function generateAutoResponse(
             newInfo[match[1].trim()] = match[2].trim();
         }
 
-        // Clean meta-tags from response STERNLY
+        // Clean meta-tags AND markdown from response STERNLY
         response = response
             .replace(/\[STAGE:\s*.*?\]/gi, "")
             .replace(/\[INFO:\s*.*?=.*?\]/gi, "")
+            .replace(/\*+/g, "")  // Strip all markdown stars
+            .replace(/#+\s*/g, "")  // Strip all markdown hashes
             .trim();
 
         console.log(`💾 Updating DB: fromNumber=${normFrom}, newStage=${newStage}`);
