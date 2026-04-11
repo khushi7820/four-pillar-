@@ -15,9 +15,8 @@ Do not add introductions. Do not summarize. Do not explain.
 
 DISCOVERY (Stage 1):
 Hey! 👋 Welcome to Four Pillars.
- 
 We help founders build brand infrastructure that actually performs — from identity to ads to PR, all under one roof.
- 
+
 How would you describe your business right now?
 • A. Just starting out
 • B. Early stage, finding our footing

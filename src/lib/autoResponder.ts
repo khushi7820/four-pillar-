@@ -430,7 +430,7 @@ export async function generateAutoResponse(
 
         // 12. SMART SPLITTING (MAX 2 BUBBLES)
         let messageChunks = response
-            .split(/\n\n+/)
+            .split(/\n\s*\n+/)
             .map(chunk => chunk.trim())
             .filter(chunk => chunk.length > 0);
 
