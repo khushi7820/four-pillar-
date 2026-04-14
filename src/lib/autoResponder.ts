@@ -220,10 +220,11 @@ export async function generateAutoResponse(
 
         if (isGreeting) {
             console.log("👋 Greeting detected");
-            // Only prompt to continue if it's a returning user after a gap
-            if (userStageData.first_message_sent && timeGapDays > 0.04) { // 1 hour gap
+            // Only prompt to continue if it's a returning user after a short gap (2 mins)
+            if (userStageData.first_message_sent && timeGapDays > 0.0013) { 
                 nextStage = "PROMPT_CONTINUE";
             } else {
+
                 nextStage = userStageData.current_stage;
             }
         } else if (isStartFresh) {
