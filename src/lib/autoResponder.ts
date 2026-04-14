@@ -229,13 +229,18 @@ export async function generateAutoResponse(
             } else if (userStageData.first_message_sent) {
                 // Return to current stage script EXACTLY
                 nextStage = userStageData.current_stage;
-                const scriptMatch = MASTER_SYSTEM_PROMPT.match(new RegExp(`${nextStage} \\(Stage[\\s\\S]*?\\[STAGE: ${nextStage}\\]`, 'i'));
+                
+                // Search in both hardcoded AND custom sheet prompt
+                const combinedSource = (customSystemPrompt || "") + "\n" + MASTER_SYSTEM_PROMPT;
+                const scriptMatch = combinedSource.match(new RegExp(`${nextStage} \\(Stage[\\s\\S]*?\\[STAGE: ${nextStage}\\]`, 'i'));
+                
                 if (scriptMatch) {
                     response = scriptMatch[0].replace(/.*\(Stage.*?\):\n?/, '').trim();
                     bypassedLLM = true;
-                    console.log(`⚡ Greeting Bypass: Using exact script for ${nextStage}`);
+                    console.log(`⚡ Greeting Bypass: Using exact script for ${nextStage} from combined source`);
                 }
             } else {
+
                 nextStage = "DISCOVERY";
             }
         } else if (isStartFresh) {
@@ -267,7 +272,8 @@ export async function generateAutoResponse(
         // We only enter Assistant Mode when we have fully captured their intent and are moving to open chat.
         const isCaptured = nextStage === "ASSISTANT_CHAT";
 
-        let systemPrompt = `ROLE: You are the Official Assistant for Four Pillars.`;
+        let systemPrompt = `ROLE: You are the Robotic Script Player for Four Pillars Media Agency.`;
+
 
         // ONLY show the script if we are NOT in Assistant Mode
         if (!isCaptured) {
@@ -313,11 +319,13 @@ export async function generateAutoResponse(
         } else {
             systemPrompt += `\n\n=== CRITICAL FINAL COMMAND (MANDATORY) ===
 1. INTENT CHECK: Look at the user's latest message. 
-    - If they are ASKING a question, inquiring about services, or requesting info: STAY in the current stage. DO NOT output the stage tag. Answer their question accurately using the knowledge base.
-    - If they have ANSWERED the previous question or selected an option (A, B, C, D): ADVANCE to the Potential Next Stage (${STAGE_MAP[userStageData.current_stage] || "END"}). Output a brief acknowledgment and then the EXACT text for that stage from the "SCRIPT" section above.
-2. STAGE TAG: Only if you decided to ADVANCE, you MUST end your message with: [STAGE: ${STAGE_MAP[userStageData.current_stage]}]
-3. ACCURACY & FORMATTING: When answering questions, check ALL parts of the Google Sheet provided. You MUST use the EXACT format, bullet points, and wording from the sheet. Do not rewrite it.
+    - If they are ASKING a question: STAY in current stage. Answer briefly using KNOWLEDGE BASE.
+    - If they have ANSWERED the question: ADVANCE to Potential Next Stage (${STAGE_MAP[userStageData.current_stage] || "END"}).
+2. NO INTRODUCTIONS: You MUST start your message immediately with the script text. Never say "Hi", "Hello", "Sure", "Here is", "Let's get started", or use emojis unless they are in the script.
+3. EXACT SCRIPT: Output ONLY the EXACT text from the "SCRIPT" section for the stage. DO NOT add, remove, or modify any words.
+4. STAGE TAG: Only if you ADVANCE, end with: [STAGE: ${STAGE_MAP[userStageData.current_stage]}]
 `;
+
 
         }
 
@@ -348,10 +356,10 @@ export async function generateAutoResponse(
             bypassedLLM = true;
             console.log("⚡ Bypassing LLM for PROMPT_CONTINUE greeting");
         } else if (!isCaptured || (capturedStages.includes(nextStage) && userStageData.current_stage !== nextStage)) {
+            // Bypass the LLM for ALL standard script stages!
+            const combinedSource = (customSystemPrompt || "") + "\n" + MASTER_SYSTEM_PROMPT;
+            const lines = combinedSource.split('\n');
 
-
-            // Bypass the LLM for ALL standard script stages, including terminal destinations (first entry only)!
-            const lines = MASTER_SYSTEM_PROMPT.split('\n');
             let isCapturingBlock = false;
             let capturedLines = [];
 
