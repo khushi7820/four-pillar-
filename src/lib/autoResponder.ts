@@ -156,9 +156,6 @@ export async function generateAutoResponse(
             customContent = `\n\n=== BUSINESS PROFILE & CUSTOM SCRIPT ===\n${customSystemPrompt}\n`;
         }
 
-        let response = "";
-        let bypassedLLM = false;
-
         const STAGE_MAP: Record<string, string> = {
             "DISCOVERY": "SELL",
             "SELL": "CUSTOMER",
@@ -174,15 +171,13 @@ export async function generateAutoResponse(
             "PROMPT_CONTINUE": "DISCOVERY"
         };
 
-
-
         const isGreeting = /^(hey|hi|hello|menu|hy|hyy|hii|hiii|heyy|heyyy|namaste|kem cho|kese ho|kaise ho|hay|hayy|hola|salaam|helow|heloww)$/i.test(messageText.trim());
         const isStartFresh = /^(start|start fresh|fresh one|fresh|new topic|new|restart|start new|start over|start again)$/i.test(messageText.trim());
         const isContinue = /^(continue|same|old|yes|y|ok|okay|okk|kk|okey|okeyy|yup|yeah|han|thik|theek|done|thik h|thik hai|yess|yep|agree|confirm|right)$/i.test(messageText.trim());
 
         // Link is no longer blacklisted
 
-        let nextStage = userStageData.current_stage; // Stay in current stage by default to allow for questions
+        let nextStage = STAGE_MAP[userStageData.current_stage] || userStageData.current_stage;
 
         // Break the loop if already in a captured/terminal stage
         if (capturedStages.includes(userStageData.current_stage) && nextStage === userStageData.current_stage) {
@@ -220,47 +215,22 @@ export async function generateAutoResponse(
                 nextStage = "NURTURE_AUDIT";
             }
         }
-
         if (isGreeting) {
-            console.log("👋 Greeting detected (Hard Bypass Mode)");
+            console.log("👋 Greeting detected");
+            // Rule: If they have ever messaged before, ask to continue. Otherwise, start discovery.
             if (userStageData.first_message_sent) {
-                // Return to Welcome Back flow IMMEDIATELY without AI
-                response = `"Welcome back! Would you like to continue our previous conversation, or should we start fresh?"\n[STAGE: ${userStageData.current_stage}]`;
-                bypassedLLM = true;
                 nextStage = "PROMPT_CONTINUE";
-                console.log("⚡ Hard Bypass triggered for returning user greeting");
             } else {
                 nextStage = "DISCOVERY";
             }
         } else if (isStartFresh) {
-            console.log("🆕 Start fresh detected.");
+            console.log("🆕 Start fresh detected. WIPING history for this prompt.");
             nextStage = "DISCOVERY";
-        } else if (isContinue && userStageData.current_stage === "PROMPT_CONTINUE") {
-            console.log("🔄 User wants to continue.");
-            nextStage = userStageData.current_stage;
+            // Important: We don't slice the actual DB history, but we slice what we send to the LLM
         } else {
-
-
-            console.log("🆕 Start fresh detected.");
-            nextStage = "DISCOVERY";
-        } else if (isContinue && userStageData.current_stage === "PROMPT_CONTINUE") {
-            console.log("🔄 User wants to continue.");
-            nextStage = userStageData.current_stage;
-        } else {
-
-
-            // For all other messages, default to the current stage and let AI decide to advance
-            nextStage = userStageData.current_stage;
-            
-            // Only suggest the NEXT stage if we suspect they might be answering
-            const likelyNext = STAGE_MAP[userStageData.current_stage];
-            if (likelyNext) {
-                console.log(`💡 Intent Check: Might advance to ${likelyNext} if answer detected.`);
-                // We don't SET nextStage yet, we let the AI decide using STAGE_MAP in prompt
-            }
+            // WE NOW LET THE AI DECIDE IF IT SHOULD ADVANCE BASED ON INTENT
+            console.log("🤖 Entering Hybrid Flow Mode - AI will decide to advance or answer.");
         }
-
-
 
         console.log(`➡️ Calculated Next Stage: ${nextStage} (Current: ${userStageData.current_stage})`);
 
@@ -268,8 +238,7 @@ export async function generateAutoResponse(
         // We only enter Assistant Mode when we have fully captured their intent and are moving to open chat.
         const isCaptured = nextStage === "ASSISTANT_CHAT";
 
-        let systemPrompt = `ROLE: You are the Robotic Script Player for Four Pillars Media Agency.`;
-
+        let systemPrompt = `ROLE: You are the Official Assistant for Four Pillars.`;
 
         // ONLY show the script if we are NOT in Assistant Mode
         if (!isCaptured) {
@@ -283,46 +252,43 @@ export async function generateAutoResponse(
         // Add context & FAQ info EARLY so they are "above" the final commands
         systemPrompt += `\n\n=== CONTEXT ===\n`;
         systemPrompt += `- Detected Language: ${detectedLanguage}\n`;
-        systemPrompt += `- Current Stage: ${userStageData.current_stage}\n`;
-        systemPrompt += `- Potential Next Stage: ${STAGE_MAP[userStageData.current_stage] || "N/A"}\n`;
-
+        systemPrompt += `- Current Stage: ${isStartFresh ? "DISCOVERY" : userStageData.current_stage}\n`;
+        systemPrompt += `- Target Stage: ${nextStage}\n`;
         systemPrompt += `- User Name: ${userStageData.collected_info?.name || "Unknown"}\n`;
         systemPrompt += `- Already Collected Data: ${JSON.stringify(userStageData.collected_info || {}, null, 2)}\n`;
         systemPrompt += `\n\n=== ADDITIONAL INFO (For specific questions only) ===\n${contextText || "No additional info."}\n`;
 
         if (nextStage === "PROMPT_CONTINUE") {
             systemPrompt += `\n\n=== SPECIAL TASK (GREETING) ===\n`;
+            systemPrompt += `The user said hello, but you already have a history with them.\n`;
             systemPrompt += `You MUST output EXACTLY this text:\n`;
             systemPrompt += `"Welcome back! Would you like to continue our previous conversation, or should we start fresh?"\n`;
-            systemPrompt += `[STAGE: ${userStageData.current_stage}]\n`; // Keep the old stage in state
+            systemPrompt += `[STAGE: ${userStageData.current_stage}]\n`; // Retain the real stage secretly
         }
-
-
 
         if (isCaptured) {
             systemPrompt += `
 \n\n=== CRITICAL FINAL COMMAND (ASSISTANT MODE) ===
 1. CHAT MODE: The sales script is officially COMPLETE. You are now a helpful Assistant.
 2. DO NOT REPEAT SCRIPT: Never output Stage 1-14 script blocks again. 
-3. KNOWLEDGE MATCH: Search through the entire Google Sheet data provided above (Persona, Convo, FAQ, and Leads sections). You must analyze all 4 parts to ensure the correct answer.
-4. ACKNOWLEDGEMENTS: If the user just says "ok", "okk", "kk", or similar, just reply with a quick emoji or "Great! Let me know if you need anything else."
+3. KNOWLEDGE MATCH: Search through the entire Google Sheet data provided. Analyze all parts.
+4. ACKNOWLEDGEMENTS: If the user just says "ok", "okk", "kk", or similar, just reply with ONE emoji only. NO text like "Great! let me know".
 5. ULTRA-CONCISE: Max 3 to 4 short bullet points only. 
 6. NO MARKDOWN: NEVER use hashes (#) or stars (*). Use emojis 📌✨.
 7. SPLIT BUBBLES: If the answer is longer than 5 or 6 lines, use a double line break (\n\n) to split it into 2 bubbles. No more than 2 bubbles.
-8. NO CHATBOT FLUFF: Start immediately with the answer.
-9. EXACT FORMATTING: When retrieving answers from the sheet (e.g., Services, Prices), use the EXACT formatting, bullet points, and wording from the document. Do not rewrite.
+8. NO CHATBOT FLUFF: Start immediately with the answer. NO "I'm here to help" or "Certainly".
+9. EXACT FORMATTING: Use the EXACT formatting, bullet points, and wording from the document. Do not rewrite.
 `;
         } else {
-            systemPrompt += `\n\n=== CRITICAL FINAL COMMAND (MANDATORY) ===
+            systemPrompt += `
+\n\n=== CRITICAL FINAL COMMAND (MANDATORY) ===
 1. INTENT CHECK: Look at the user's latest message. 
-    - If they are ASKING a question: STAY in current stage. Answer briefly using KNOWLEDGE BASE.
-    - If they have ANSWERED the question: ADVANCE to Potential Next Stage (${STAGE_MAP[userStageData.current_stage] || "END"}).
-2. NO INTRODUCTIONS: You MUST start your message immediately with the script text. Never say "Hi", "Hello", "Sure", "Here is", "Let's get started", or use emojis unless they are in the script.
-3. EXACT SCRIPT: Output ONLY the EXACT text from the "SCRIPT" section for the stage. DO NOT add, remove, or modify any words.
-4. STAGE TAG: Only if you ADVANCE, end with: [STAGE: ${STAGE_MAP[userStageData.current_stage]}]
+   - If they are ASKING a question: Answer it accurately using the knowledge base. Be very brief (max 3 lines). NO filler or introductory phrases.
+   - If they have ANSWERED the previous question or selected an option (A, B, C, D): ADVANCE. Output the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section.
+2. STAGE TAG: Only if you decided to ADVANCE, you MUST end your message with: [STAGE: ${nextStage}]
+3. NO FILLER: Do not say "Great!", "Sure thing", or "I understand". Just give the script or the answer directly.
+4. ACCURACY: When answering, check ALL parts of the Google Sheet. Use the EXACT format from the sheet.
 `;
-
-
         }
 
         if (isStartFresh) {
@@ -346,16 +312,16 @@ export async function generateAutoResponse(
         console.log(`Sending to LLM with ${messages.length} total messages. Target Stage: ${nextStage}`);
 
         // --- HARDCODED SCRIPT BYPASS (SAVE TOKENS & KILL HALLUCINATIONS) ---
+        let response = "";
+        let bypassedLLM = false;
 
         if (nextStage === "PROMPT_CONTINUE") {
             response = `"Welcome back! Would you like to continue our previous conversation, or should we start fresh?"\n[STAGE: ${userStageData.current_stage}]`;
             bypassedLLM = true;
             console.log("⚡ Bypassing LLM for PROMPT_CONTINUE greeting");
         } else if (!isCaptured || (capturedStages.includes(nextStage) && userStageData.current_stage !== nextStage)) {
-            // Bypass the LLM for ALL standard script stages!
-            const combinedSource = (customSystemPrompt || "") + "\n" + MASTER_SYSTEM_PROMPT;
-            const lines = combinedSource.split('\n');
-
+            // Bypass the LLM for ALL standard script stages, including terminal destinations (first entry only)!
+            const lines = MASTER_SYSTEM_PROMPT.split('\n');
             let isCapturingBlock = false;
             let capturedLines = [];
 
@@ -483,9 +449,8 @@ export async function generateAutoResponse(
             .trim();
 
         console.log(`💾 Updating DB: fromNumber=${normFrom}, newStage=${newStage}`);
-        // Update database stage/info - we will do a final update after extraction
-        await updateUserConversationStage(normFrom, normTo, newStage, newInfo, true);
-        console.log(`✅ Initial DB Update done`);
+        // Update database stage/info
+        // response = response... (removed redundant clean meta-tags block as it's below)
 
 
         // 12. SMART SPLITTING (MAX 2 BUBBLES)
@@ -560,25 +525,16 @@ export async function generateAutoResponse(
         const grKey = phoneMapping.groq_api_key || process.env.GROQ_API_KEY;
 
         const [extractedData] = await Promise.all([
-            extractLeadData(messageText, gKey || "", grKey || ""),
-            supabase
-                .from("whatsapp_messages")
-                .update({
-                    auto_respond_sent: true,
-                    is_responded: true,
-                    response_sent_at: new Date().toISOString(),
-                })
-                .eq("message_id", messageId)
+            extractLeadData(messageText, gKey || "", grKey || "")
         ]);
 
         console.log("Extracted Lead Info:", extractedData);
 
         // 14. Save state with extracted data
-        if (Object.keys(extractedData).length > 0) {
-            await updateUserConversationStage(fromNumber, toNumber, newStage, extractedData);
-            console.log(`✅ Final DB Update with extraction done`);
-        }
-
+        // Final DB Update with all collected data
+        const finalInfo = { ...newInfo, ...extractedData };
+        await updateUserConversationStage(normFrom, normTo, newStage, finalInfo, true);
+        console.log(`✅ Consolidated DB Update successful`);
 
         console.log(`✅ Auto-response chunks sent successfully to ${fromNumber}`);
 
