@@ -223,14 +223,20 @@ export async function POST(req: Request) {
             console.log("Processing auto-response for message:", payload.messageId);
 
             try {
-                // IMMEDIATE LOCK: Mark as responded before starting processing
-                await supabase
+                // ATOMIC LOCK: Only the first request to successfully update the row wins
+                const { count, error: lockError } = await supabase
                     .from("whatsapp_messages")
                     .update({
                         auto_respond_sent: true,
                         response_sent_at: new Date().toISOString()
-                    })
-                    .eq("message_id", payload.messageId);
+                    }, { count: 'exact' })
+                    .eq("message_id", payload.messageId)
+                    .eq("auto_respond_sent", false); // ONLY update if it hasn't been updated yet
+
+                if (lockError || (count !== null && count === 0)) {
+                    console.log("🔒 Lock acquired by another process. Skipping double response.");
+                    return NextResponse.json({ success: true, message: "Handled by concurrent process" });
+                }
 
                 // ALWAYS try to generate a proper auto-response for user messages
                 const result = await generateAutoResponse(
