@@ -220,14 +220,23 @@ export async function generateAutoResponse(
 
         if (isGreeting) {
             console.log("👋 Greeting detected");
-            // Only prompt to continue if it's a returning user after a short gap (2 mins)
+            // Only prompt to continue if it's a returning user after a short gap
             if (userStageData.first_message_sent && timeGapDays > 0.0013) { 
                 nextStage = "PROMPT_CONTINUE";
-            } else {
-
+            } else if (userStageData.first_message_sent) {
+                // Return to current stage script EXACTLY
                 nextStage = userStageData.current_stage;
+                const scriptMatch = MASTER_SYSTEM_PROMPT.match(new RegExp(`${nextStage} \\(Stage[\\s\\S]*?\\[STAGE: ${nextStage}\\]`, 'i'));
+                if (scriptMatch) {
+                    response = scriptMatch[0].replace(/.*\(Stage.*?\):\n?/, '').trim();
+                    bypassedLLM = true;
+                    console.log(`⚡ Greeting Bypass: Using exact script for ${nextStage}`);
+                }
+            } else {
+                nextStage = "DISCOVERY";
             }
         } else if (isStartFresh) {
+
             console.log("🆕 Start fresh detected.");
             nextStage = "DISCOVERY";
         } else if (isContinue && userStageData.current_stage === "PROMPT_CONTINUE") {
