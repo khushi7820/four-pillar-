@@ -177,7 +177,7 @@ export async function generateAutoResponse(
 
         // Link is no longer blacklisted
 
-        let nextStage = STAGE_MAP[userStageData.current_stage] || userStageData.current_stage;
+        let nextStage = userStageData.current_stage; // Stay in current stage by default to allow for questions
 
         // Break the loop if already in a captured/terminal stage
         if (capturedStages.includes(userStageData.current_stage) && nextStage === userStageData.current_stage) {
@@ -215,22 +215,32 @@ export async function generateAutoResponse(
                 nextStage = "NURTURE_AUDIT";
             }
         }
+
         if (isGreeting) {
             console.log("👋 Greeting detected");
-            // Rule: Only show Welcome Back if they messaged in the last 4 days
-            if (timeGapDays > 0 && timeGapDays <= 4) {
+            // Rule: Only prompt to continue if they've been away for more than 24 hours.
+            if (userStageData.first_message_sent && timeGapDays > 1) {
                 nextStage = "PROMPT_CONTINUE";
             } else {
-                nextStage = "DISCOVERY";
+                // For a normal greeting return the current stage script or stay
+                nextStage = userStageData.current_stage;
             }
         } else if (isStartFresh) {
-            console.log("🆕 Start fresh detected. WIPING history for this prompt.");
+            console.log("🆕 Start fresh detected.");
             nextStage = "DISCOVERY";
-            // Important: We don't slice the actual DB history, but we slice what we send to the LLM
         } else {
-            // WE NOW LET THE AI DECIDE IF IT SHOULD ADVANCE BASED ON INTENT
-            console.log("🤖 Entering Hybrid Flow Mode - AI will decide to advance or answer.");
+            // For all other messages, default to the current stage and let AI decide to advance
+            nextStage = userStageData.current_stage;
+            
+            // Only suggest the NEXT stage if we suspect they might be answering
+            const likelyNext = STAGE_MAP[userStageData.current_stage];
+            if (likelyNext) {
+                console.log(`💡 Intent Check: Might advance to ${likelyNext} if answer detected.`);
+                // We don't SET nextStage yet, we let the AI decide using STAGE_MAP in prompt
+            }
         }
+
+
 
         console.log(`➡️ Calculated Next Stage: ${nextStage} (Current: ${userStageData.current_stage})`);
 
@@ -252,8 +262,9 @@ export async function generateAutoResponse(
         // Add context & FAQ info EARLY so they are "above" the final commands
         systemPrompt += `\n\n=== CONTEXT ===\n`;
         systemPrompt += `- Detected Language: ${detectedLanguage}\n`;
-        systemPrompt += `- Current Stage: ${isStartFresh ? "DISCOVERY" : userStageData.current_stage}\n`;
-        systemPrompt += `- Target Stage: ${nextStage}\n`;
+        systemPrompt += `- Current Stage: ${userStageData.current_stage}\n`;
+        systemPrompt += `- Potential Next Stage: ${STAGE_MAP[userStageData.current_stage] || "N/A"}\n`;
+
         systemPrompt += `- User Name: ${userStageData.collected_info?.name || "Unknown"}\n`;
         systemPrompt += `- Already Collected Data: ${JSON.stringify(userStageData.collected_info || {}, null, 2)}\n`;
         systemPrompt += `\n\n=== ADDITIONAL INFO (For specific questions only) ===\n${contextText || "No additional info."}\n`;
@@ -280,14 +291,14 @@ export async function generateAutoResponse(
 9. EXACT FORMATTING: When retrieving answers from the sheet (e.g., Services, Prices), use the EXACT formatting, bullet points, and wording from the document. Do not rewrite.
 `;
         } else {
-            systemPrompt += `
-\n\n=== CRITICAL FINAL COMMAND (MANDATORY) ===
+            systemPrompt += `\n\n=== CRITICAL FINAL COMMAND (MANDATORY) ===
 1. INTENT CHECK: Look at the user's latest message. 
-   - If they are ASKING a question, inquiring about services, or requesting info: STAY in the current stage. DO NOT output the stage tag. Answer their question accurately using the knowledge base.
-   - If they have ANSWERED the previous question or selected an option (A, B, C, D): ADVANCE. Output a brief acknowledgment and then the EXACT text for the Target Stage (${nextStage}) from the "SCRIPT" section above.
-2. STAGE TAG: Only if you decided to ADVANCE, you MUST end your message with: [STAGE: ${nextStage}]
-3. ACCURACY & FORMATTING: When answering questions, check ALL parts of the Google Sheet provided. If they ask about services, mention "The Look" and others found in the sheet. You MUST use the EXACT format, bullet points, and wording from the sheet. Do not rewrite it.
+    - If they are ASKING a question, inquiring about services, or requesting info: STAY in the current stage. DO NOT output the stage tag. Answer their question accurately using the knowledge base.
+    - If they have ANSWERED the previous question or selected an option (A, B, C, D): ADVANCE to the Potential Next Stage (${STAGE_MAP[userStageData.current_stage] || "END"}). Output a brief acknowledgment and then the EXACT text for that stage from the "SCRIPT" section above.
+2. STAGE TAG: Only if you decided to ADVANCE, you MUST end your message with: [STAGE: ${STAGE_MAP[userStageData.current_stage]}]
+3. ACCURACY & FORMATTING: When answering questions, check ALL parts of the Google Sheet provided. You MUST use the EXACT format, bullet points, and wording from the sheet. Do not rewrite it.
 `;
+
         }
 
         if (isStartFresh) {
@@ -448,9 +459,10 @@ export async function generateAutoResponse(
             .trim();
 
         console.log(`💾 Updating DB: fromNumber=${normFrom}, newStage=${newStage}`);
-        // Update database stage/info
+        // Update database stage/info - we will do a final update after extraction
         await updateUserConversationStage(normFrom, normTo, newStage, newInfo, true);
-        console.log(`✅ DB Update attempted`);
+        console.log(`✅ Initial DB Update done`);
+
 
         // 12. SMART SPLITTING (MAX 2 BUBBLES)
         let messageChunks = response
@@ -538,8 +550,11 @@ export async function generateAutoResponse(
         console.log("Extracted Lead Info:", extractedData);
 
         // 14. Save state with extracted data
-        await updateUserConversationStage(fromNumber, toNumber, newStage, extractedData);
-        console.log(`✅ DB Update attempted`);
+        if (Object.keys(extractedData).length > 0) {
+            await updateUserConversationStage(fromNumber, toNumber, newStage, extractedData);
+            console.log(`✅ Final DB Update with extraction done`);
+        }
+
 
         console.log(`✅ Auto-response chunks sent successfully to ${fromNumber}`);
 

@@ -220,101 +220,47 @@ export async function POST(req: Request) {
 
         // Trigger auto-response for all user messages (text or transcribed voice)
         if (messageText && payload.event === "MoMessage" && !alreadyResponded) {
-            console.log("Processing auto-response for message:", payload.messageId);
-            console.log("Message will be 24-hour window processed:", true);
+            console.log("Processing auto-response in background for message:", payload.messageId);
+            
+            // 1. Immediately LOCK the message to prevent duplicate processing from retries
+            await supabase
+                .from("whatsapp_messages")
+                .update({
+                    auto_respond_sent: true,
+                    is_responded: true,
+                    response_sent_at: new Date().toISOString()
+                })
+                .eq("message_id", payload.messageId);
 
-            try {
-                // ALWAYS try to generate a proper auto-response for user messages
-                const result = await generateAutoResponse(
-                    payload.from,
-                    payload.to,
-                    messageText,
-                    payload.messageId,
-                    payload.whatsapp?.senderName
-                );
-
-                if (result.success) {
-                    console.log("✅ Auto-response sent successfully");
-
-                    // Mark the message as responded in the database
-                    await supabase
-                        .from("whatsapp_messages")
-                        .update({
-                            auto_respond_sent: true,
-                            response_sent_at: new Date().toISOString()
-                        })
-                        .eq("message_id", payload.messageId);
-
-                } else {
-                    console.error("❌ Auto-response generation failed:", result.error);
-                    
-                    // If auto-response fails, send a helpful error message
-                    try {
-                        const { data: mapping } = await supabase
-                            .from("phone_document_mapping")
-                            .select("*")
-                            .eq("phone_number", payload.to)
-                            .single();
-
-                        const authToken = mapping?.auth_token;
-                        const origin = mapping?.origin;
-
-                        if (authToken && origin) {
-                            await sendWhatsAppMessage(
-                                payload.from,
-                                "Hi! 👋 I received your message. I'm processing your request. Please try again in a moment if you don't hear back.",
-                                authToken,
-                                origin
-                            );
-                        }
-
-                        // Log the failed attempt but mark as responded
-                        await supabase
-                            .from("whatsapp_messages")
-                            .update({
-                                auto_respond_sent: true,
-                                response_sent_at: new Date().toISOString()
-                            })
-                            .eq("message_id", payload.messageId);
-                    } catch (err) {
-                        console.error("Error sending fallback message:", err);
-                    }
-                }
-            } catch (err) {
-                console.error("Unexpected error in auto-response processing:", err);
-                
-                // Send a friendly error message
+            // 2. Decouple processing from the HTTP response
+            (async () => {
                 try {
-                    const { data: mapping } = await supabase
-                        .from("phone_document_mapping")
-                        .select("*")
-                        .eq("phone_number", payload.to)
-                        .single();
+                    const result = await generateAutoResponse(
+                        payload.from,
+                        payload.to,
+                        messageText,
+                        payload.messageId,
+                        payload.whatsapp?.senderName
+                    );
 
-                    const authToken = mapping?.auth_token;
-                    const origin = mapping?.origin;
-
-                    if (authToken && origin) {
-                        await sendWhatsAppMessage(
-                            payload.from,
-                            "Hi! 👋 I received your message. Please give me a moment to process it.",
-                            authToken,
-                            origin
-                        );
+                    if (result.success) {
+                        console.log("✅ Auto-response background process finished");
+                    } else {
+                        console.error("❌ Auto-response failed:", result.error);
                     }
-
-                    await supabase
-                        .from("whatsapp_messages")
-                        .update({
-                            auto_respond_sent: true,
-                            response_sent_at: new Date().toISOString()
-                        })
-                        .eq("message_id", payload.messageId);
-                } catch (innerErr) {
-                    console.error("Error sending emergency fallback:", innerErr);
+                } catch (err) {
+                    console.error("Critical error in background processing:", err);
                 }
-            }
-        } else if (alreadyResponded) {
+            })();
+
+            // 3. Respond 200 OK immediately to WhatsApp
+            return NextResponse.json({
+                success: true,
+                message: "Auto-response processing started in background"
+            });
+        }
+
+ else if (alreadyResponded) {
             console.log("Skipping auto-response - already sent for message:", payload.messageId);
         }
 
