@@ -222,28 +222,24 @@ export async function generateAutoResponse(
         }
 
         if (isGreeting) {
-            console.log("👋 Greeting detected");
-            // Only prompt to continue if it's a returning user after a short gap
-            if (userStageData.first_message_sent && timeGapDays > 0.0013) { 
+            console.log("👋 Greeting detected (Hard Bypass Mode)");
+            if (userStageData.first_message_sent) {
+                // Return to Welcome Back flow IMMEDIATELY without AI
+                response = `"Welcome back! Would you like to continue our previous conversation, or should we start fresh?"\n[STAGE: ${userStageData.current_stage}]`;
+                bypassedLLM = true;
                 nextStage = "PROMPT_CONTINUE";
-            } else if (userStageData.first_message_sent) {
-                // Return to current stage script EXACTLY
-                nextStage = userStageData.current_stage;
-                
-                // Search in both hardcoded AND custom sheet prompt
-                const combinedSource = (customSystemPrompt || "") + "\n" + MASTER_SYSTEM_PROMPT;
-                const scriptMatch = combinedSource.match(new RegExp(`${nextStage} \\(Stage[\\s\\S]*?\\[STAGE: ${nextStage}\\]`, 'i'));
-                
-                if (scriptMatch) {
-                    response = scriptMatch[0].replace(/.*\(Stage.*?\):\n?/, '').trim();
-                    bypassedLLM = true;
-                    console.log(`⚡ Greeting Bypass: Using exact script for ${nextStage} from combined source`);
-                }
+                console.log("⚡ Hard Bypass triggered for returning user greeting");
             } else {
-
                 nextStage = "DISCOVERY";
             }
         } else if (isStartFresh) {
+            console.log("🆕 Start fresh detected.");
+            nextStage = "DISCOVERY";
+        } else if (isContinue && userStageData.current_stage === "PROMPT_CONTINUE") {
+            console.log("🔄 User wants to continue.");
+            nextStage = userStageData.current_stage;
+        } else {
+
 
             console.log("🆕 Start fresh detected.");
             nextStage = "DISCOVERY";
