@@ -167,9 +167,9 @@ export async function generateAutoResponse(
             "NURTURE_CONTENT": "NURTURE_DIGITAL",
             "NURTURE_DIGITAL": "DISCOVERY_SESSIONS",
             "DISCOVERY_SESSIONS": "WARM_LEAD",
-            "NURTURE_AUDIT": "INTENT_CAPTURE",
-            "PROMPT_CONTINUE": "DISCOVERY"
+            "NURTURE_AUDIT": "INTENT_CAPTURE"
         };
+
 
         const isGreeting = /^(hey|hi|hello|menu|hy|hyy|hii|hiii|heyy|heyyy|namaste|kem cho|kese ho|kaise ho|hay|hayy|hola|salaam|helow|heloww)$/i.test(messageText.trim());
         const isStartFresh = /^(start|start fresh|fresh one|fresh|new topic|new|restart|start new|start over|start again)$/i.test(messageText.trim());
@@ -218,17 +218,17 @@ export async function generateAutoResponse(
 
         if (isGreeting) {
             console.log("👋 Greeting detected");
-            // Rule: Only prompt to continue if they've been away for more than 24 hours.
-            if (userStageData.first_message_sent && timeGapDays > 1) {
-                nextStage = "PROMPT_CONTINUE";
+            if (!userStageData.first_message_sent) {
+                nextStage = "DISCOVERY";
             } else {
-                // For a normal greeting return the current stage script or stay
+                // Return to current stage instead of prompting to reboot
                 nextStage = userStageData.current_stage;
             }
         } else if (isStartFresh) {
             console.log("🆕 Start fresh detected.");
             nextStage = "DISCOVERY";
         } else {
+
             // For all other messages, default to the current stage and let AI decide to advance
             nextStage = userStageData.current_stage;
             
@@ -269,13 +269,11 @@ export async function generateAutoResponse(
         systemPrompt += `- Already Collected Data: ${JSON.stringify(userStageData.collected_info || {}, null, 2)}\n`;
         systemPrompt += `\n\n=== ADDITIONAL INFO (For specific questions only) ===\n${contextText || "No additional info."}\n`;
 
-        if (nextStage === "PROMPT_CONTINUE") {
+        if (isGreeting && userStageData.first_message_sent) {
             systemPrompt += `\n\n=== SPECIAL TASK (GREETING) ===\n`;
-            systemPrompt += `The user said hello, but you already have a history with them.\n`;
-            systemPrompt += `You MUST output EXACTLY this text:\n`;
-            systemPrompt += `"Welcome back! Would you like to continue our previous conversation, or should we start fresh?"\n`;
-            systemPrompt += `[STAGE: ${userStageData.current_stage}]\n`; // Retain the real stage secretly
+            systemPrompt += `The user said hello. Acknowledge them warmly and then repeat the exact script for the Current Stage (${userStageData.current_stage}) to keep them in the flow.\n`;
         }
+
 
         if (isCaptured) {
             systemPrompt += `
@@ -325,11 +323,15 @@ export async function generateAutoResponse(
         let response = "";
         let bypassedLLM = false;
 
-        if (nextStage === "PROMPT_CONTINUE") {
-            response = `"Welcome back! Would you like to continue our previous conversation, or should we start fresh?"\n[STAGE: ${userStageData.current_stage}]`;
-            bypassedLLM = true;
-            console.log("⚡ Bypassing LLM for PROMPT_CONTINUE greeting");
+        if (nextStage === "DISCOVERY" && !userStageData.first_message_sent) {
+            // Bypass for the very first welcome message
+            const script = MASTER_SYSTEM_PROMPT.match(/DISCOVERY \(Stage 1\):([\s\S]*?)\[STAGE: DISCOVERY\]/);
+            if (script) {
+                response = script[1].trim() + "\n[STAGE: DISCOVERY]";
+                bypassedLLM = true;
+            }
         } else if (!isCaptured || (capturedStages.includes(nextStage) && userStageData.current_stage !== nextStage)) {
+
             // Bypass the LLM for ALL standard script stages, including terminal destinations (first entry only)!
             const lines = MASTER_SYSTEM_PROMPT.split('\n');
             let isCapturingBlock = false;
