@@ -156,6 +156,9 @@ export async function generateAutoResponse(
             customContent = `\n\n=== BUSINESS PROFILE & CUSTOM SCRIPT ===\n${customSystemPrompt}\n`;
         }
 
+        let response = "";
+        let bypassedLLM = false;
+
         const STAGE_MAP: Record<string, string> = {
             "DISCOVERY": "SELL",
             "SELL": "CUSTOMER",
@@ -339,8 +342,6 @@ export async function generateAutoResponse(
         console.log(`Sending to LLM with ${messages.length} total messages. Target Stage: ${nextStage}`);
 
         // --- HARDCODED SCRIPT BYPASS (SAVE TOKENS & KILL HALLUCINATIONS) ---
-        let response = "";
-        let bypassedLLM = false;
 
         if (nextStage === "PROMPT_CONTINUE") {
             response = `"Welcome back! Would you like to continue our previous conversation, or should we start fresh?"\n[STAGE: ${userStageData.current_stage}]`;
